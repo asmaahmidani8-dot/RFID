@@ -205,27 +205,49 @@ def test_connexion():
 def recevoir_scan():
     """
     Reçoit un scan du Pepper C1.
-    Body JSON : { "uid": "A3F2C1D4", "scanner_id": "SCAN_SUPERMARCHE" }
+    Body JSON : { "uid": "A3F2C1D4" }
+    Flask identifie le scanner automatiquement via l'IP source.
     """
-    data       = request.json or {}
-    now        = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    uid        = data.get("uid", "").strip().upper()
-    scanner_id = data.get("scanner_id", "PEPPER_C1")
-    type_tag   = data.get("type", "MIFARE")
+    data     = request.json or {}
+    now      = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    uid      = data.get("uid", "").strip().upper()
+    ip_source = request.remote_addr  # IP du Pepper C1
 
     print(f"\n{'='*45}")
     print(f"  SCAN RECU — {now}")
     print(f"  UID       : {uid}")
-    print(f"  Scanner   : {scanner_id}")
+    print(f"  IP source : {ip_source}")
     print(f"{'='*45}")
 
     if not uid:
         return jsonify({"status": "erreur", "message": "UID vide"}), 400
 
-    # Verifier si le badge est connu
-    db   = get_db()
+    db = get_db()
+
+    # ── Identifier le scanner via son IP ──────────────────────────────────
+    scanner = db.execute(
+        "SELECT * FROM rfid_scanners WHERE ip_address = ? AND actif = 1",
+        (ip_source,)
+    ).fetchone()
+
+    if not scanner:
+        print(f"  ATTENTION : IP {ip_source} inconnue dans rfid_scanners")
+        db.close()
+        return jsonify({
+            "status" : "erreur",
+            "message": f"Lecteur inconnu (IP: {ip_source})",
+            "ip"     : ip_source
+        }), 403
+
+    scanner_id = scanner["scanner_id"]
+    type_scan  = scanner["type_scan"]
+    poste_id   = scanner["poste_id"]
+
+    print(f"  Scanner   : {scanner_id} ({type_scan})")
+
+    # ── Identifier le badge et le chariot ─────────────────────────────────
     card = db.execute(
-        "SELECT * FROM rfid_cards WHERE uid = ?", (uid,)
+        "SELECT * FROM rfid_cards WHERE uid = ? AND actif = 1", (uid,)
     ).fetchone()
 
     if card:
@@ -236,22 +258,34 @@ def recevoir_scan():
     else:
         chariot_info = {}
 
-    # Enregistrer l'evenement
+    # ── Choisir l'événement selon le type de scan ─────────────────────────
+    if type_scan == "SUPERMARCHE":
+        evenement = "SCAN_1_SUPERMARCHE"
+    elif type_scan == "ZONE_ATTENTE":
+        evenement = "SCAN_2_ZONE_ATTENTE"
+    elif type_scan == "RETOUR":
+        evenement = "SCAN_3_RETOUR"
+    else:
+        evenement = "ERREUR_SCAN"
+
+    # ── Enregistrer l'événement ───────────────────────────────────────────
     db.execute("""
-        INSERT INTO cart_events (rfid_uid, evenement, scanner_id)
-        VALUES (?, 'SCAN_1_SUPERMARCHE', ?)
-    """, (uid, scanner_id))
+        INSERT INTO cart_events (rfid_uid, evenement, scanner_id, poste_id)
+        VALUES (?, ?, ?, ?)
+    """, (uid, evenement, scanner_id, poste_id))
     db.commit()
     db.close()
 
     return jsonify({
-        "status"   : "ok",
-        "uid"      : uid,
-        "scanner"  : scanner_id,
-        "ts"       : now,
+        "status"     : "ok",
+        "uid"        : uid,
+        "scanner_id" : scanner_id,
+        "type_scan"  : type_scan,
+        "poste_id"   : poste_id,
+        "evenement"  : evenement,
+        "ts"         : now,
         "badge_connu": card is not None,
-        "chariot"  : chariot_info,
-        "message"  : f"Scan enregistre a {now}",
+        "chariot"    : chariot_info,
     })
 
 

@@ -2,7 +2,6 @@
 setup_sqlserver.py — Création automatique de la base rfid_pristina
 sur SQL Server local (localhost\SQLEXPRESS, Windows Authentication)
 
-Commande : python backend/setup_sqlserver.py
 """
 
 import sys
@@ -15,10 +14,9 @@ except ImportError:
     sys.exit(1)
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
-SERVER   = r"localhost\SQLEXPRESS"
-DB_NAME  = "rfid_pristina"
+SERVER  = r"localhost\SQLEXPRESS"
+DB_NAME = "rfid_pristina"
 
-# Windows Authentication (pas besoin de login/mot de passe)
 CONN_MASTER = (
     f"DRIVER={{ODBC Driver 17 for SQL Server}};"
     f"SERVER={SERVER};"
@@ -35,26 +33,39 @@ CONN_RFID = (
 )
 
 
+# ─── UTILITAIRE : ajouter une colonne si elle n'existe pas ───────────────────
+
+def ajouter_colonne(c, table, colonne, definition):
+    """Ajoute une colonne à une table si elle n'existe pas déjà."""
+    c.execute(f"""
+        IF NOT EXISTS (
+            SELECT * FROM sys.columns
+            WHERE name = '{colonne}'
+            AND object_id = OBJECT_ID('{table}')
+        )
+        ALTER TABLE {table} ADD {colonne} {definition}
+    """)
+
+
+# ─── ÉTAPE 1 : créer la base ─────────────────────────────────────────────────
+
 def creer_base(conn_master):
-    """Crée la base rfid_pristina si elle n'existe pas."""
     conn_master.autocommit = True
     c = conn_master.cursor()
-
     existe = c.execute(
         "SELECT COUNT(*) FROM sys.databases WHERE name = ?", (DB_NAME,)
     ).fetchone()[0]
-
     if existe:
-        print(f"  ✓ Base '{DB_NAME}' déjà existante — on continue")
+        print(f"  ✓ Base '{DB_NAME}' déjà existante")
     else:
         c.execute(f"CREATE DATABASE [{DB_NAME}]")
         print(f"  ✓ Base '{DB_NAME}' créée")
-
     conn_master.autocommit = False
 
 
+# ─── ÉTAPE 2 : créer les tables ──────────────────────────────────────────────
+
 def creer_tables(conn):
-    """Crée les 9 tables dans rfid_pristina."""
     c = conn.cursor()
     print("\nCréation des tables...")
 
@@ -93,7 +104,6 @@ def creer_tables(conn):
             scanner_id      VARCHAR(30)  NOT NULL PRIMARY KEY,
             type_scan       VARCHAR(20)  NOT NULL
                             CHECK (type_scan IN ('SUPERMARCHE','ZONE_ATTENTE','RETOUR')),
-            operation_code  VARCHAR(10),
             poste_id        VARCHAR(10),
             ip_address      VARCHAR(15),
             localisation    VARCHAR(50),
@@ -235,15 +245,49 @@ def creer_tables(conn):
             print(f"  ERREUR {nom} : {e}")
 
     conn.commit()
-    print("\nToutes les tables créées ✓")
+    print("Tables créées ✓")
 
 
+# ─── ÉTAPE 3 : mettre à jour les tables (ajouter nouvelles colonnes) ─────────
+
+def mettre_a_jour_tables(conn):
+    """
+    Ajoute les nouvelles colonnes si elles n'existent pas.
+    Ne supprime jamais de données.
+    → Ajoute ici tes nouvelles colonnes quand tu modifies le schéma.
+    """
+    c = conn.cursor()
+    print("\nMise à jour des tables...")
+
+    mises_a_jour = [
+        # Format : (table, colonne, définition SQL)
+        # Exemples — décommente ou ajoute ici tes nouvelles colonnes :
+        # ("chariots",      "couleur",        "VARCHAR(20)"),
+        # ("cart_missions", "priorite",       "INT DEFAULT 0"),
+        # ("rfid_scanners", "nom_affichage",  "VARCHAR(50)"),
+    ]
+
+    if not mises_a_jour:
+        print("  ✓ Aucune mise à jour nécessaire")
+        return
+
+    for table, colonne, definition in mises_a_jour:
+        try:
+            ajouter_colonne(c, table, colonne, definition)
+            print(f"  ✓ {table}.{colonne} ajoutée")
+        except Exception as e:
+            print(f"  ERREUR {table}.{colonne} : {e}")
+
+    conn.commit()
+    print("Mise à jour terminée ✓")
+
+
+# ─── RÉSUMÉ ───────────────────────────────────────────────────────────────────
 
 def afficher_resume(conn):
-    """Affiche le nombre de lignes dans chaque table."""
     c = conn.cursor()
     print("\n" + "=" * 45)
-    print("  RÉSUMÉ BASE DE DONNÉES SQL SERVER")
+    print("  RÉSUMÉ BASE DE DONNÉES")
     print("=" * 45)
     tables = [
         "chariots", "rfid_cards", "rfid_scanners",
@@ -256,31 +300,29 @@ def afficher_resume(conn):
     print("=" * 45)
 
 
+# ─── LANCEMENT ────────────────────────────────────────────────────────────────
+
 if __name__ == "__main__":
     print("\n" + "=" * 45)
     print("  SETUP SQL SERVER — rfid_pristina")
     print(f"  Serveur : {SERVER}")
     print("=" * 45 + "\n")
 
-    # Étape 1 : connexion à master pour créer la base
     print("Connexion à master...")
     try:
         conn_master = pyodbc.connect(CONN_MASTER)
         print("  ✓ Connecté à master")
     except Exception as e:
         print(f"  ERREUR connexion : {e}")
-        print("\nVérifications :")
-        print("  1. SQL Server Express est démarré ?")
-        print("     → Cherche 'Services' dans le menu Windows")
-        print("     → 'SQL Server (SQLEXPRESS)' doit être 'En cours d'exécution'")
+        print("\n  1. SQL Server Express démarré ?")
+        print("     → Services Windows → 'SQL Server (SQLEXPRESS)'")
         print("  2. ODBC Driver 17 installé ?")
-        print("     → Télécharge : https://aka.ms/odbc17")
+        print("     → https://aka.ms/odbc17")
         sys.exit(1)
 
     creer_base(conn_master)
     conn_master.close()
 
-    # Étape 2 : connexion à rfid_pristina pour créer les tables
     print(f"\nConnexion à {DB_NAME}...")
     try:
         conn = pyodbc.connect(CONN_RFID)
@@ -290,8 +332,9 @@ if __name__ == "__main__":
         sys.exit(1)
 
     creer_tables(conn)
+    mettre_a_jour_tables(conn)
     afficher_resume(conn)
 
     conn.close()
-    print(f"\nBase '{DB_NAME}' prête sur {SERVER} !")
+    print(f"\nBase '{DB_NAME}' prête !")
     print("Lance maintenant : python backend/app.py\n")
