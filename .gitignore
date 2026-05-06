@@ -1,0 +1,15 @@
+# Base de données locale (ne pas partager)
+*.db
+*.sqlite
+
+# VS Code
+.vscode/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environnement virtuel
+venv/
+env/
