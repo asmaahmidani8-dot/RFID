@@ -80,6 +80,8 @@ def creer_tables(conn):
             station         VARCHAR(20)  NOT NULL,
             operation_code  VARCHAR(10)  NOT NULL,
             nb_ofs          INT          DEFAULT 1,
+            type_chariot    VARCHAR(10)  DEFAULT 'RM'
+                            CHECK (type_chariot IN ('RM','RIP')),
             actif           BIT          DEFAULT 1
         )
         """, "chariots"),
@@ -261,10 +263,7 @@ def mettre_a_jour_tables(conn):
 
     mises_a_jour = [
         # Format : (table, colonne, définition SQL)
-        # Exemples — décommente ou ajoute ici tes nouvelles colonnes :
-        # ("chariots",      "couleur",        "VARCHAR(20)"),
-        # ("cart_missions", "priorite",       "INT DEFAULT 0"),
-        # ("rfid_scanners", "nom_affichage",  "VARCHAR(50)"),
+        ("chariots", "type_chariot", "VARCHAR(10) DEFAULT 'RM' CHECK (type_chariot IN ('RM','RIP'))"),
     ]
 
     if not mises_a_jour:
