@@ -116,3 +116,24 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
+    #-- 1. Insérer les chariots
+#INSERT INTO chariots (chariot_id, nom, station, operation_code, nb_ofs, type_chariot) VALUES
+#('CHR-F2-OP10-1', 'Chariot OP10 1/2', 'Feeder 2', 'OP10', 1, 'RM'),
+#('CHR-F2-OP10-2', 'Chariot OP10 2/2', 'Feeder 2', 'OP10', 1, 'RM'),
+#('CHR-F1-OP20-1', 'Chariot OP20 1/2', 'Feeder 1', 'OP20', 1, 'RM'),
+#('CHR-F1-OP20-2', 'Chariot OP20 2/2', 'Feeder 1', 'OP20', 1, 'RM'),
+# #
+#('CHR-F3-1',      'Chariot Feeder 3', 'Feeder 3', 'OP10', 2, 'RM');
+
+#-- 2. Insérer le scanner supermarché
+#INSERT INTO rfid_scanners (scanner_id, type_scan, poste_id, ip_address, localisation) VALUES
+#('SCAN_SUPERMARCHE', 'SUPERMARCHE', NULL, '172.20.10.5', 'Sortie supermarché');
+
+#-- 3. Insérer les 5 badges
+#INSERT INTO rfid_cards (uid, chariot_id) VALUES
+#('046D16D24B7780', 'CHR-F2-OP10-1'),
+#('043234D24B7780', 'CHR-F2-OP10-2'),
+#('044643D24B7780', 'CHR-F1-OP20-1'),
+#('045761D24B7780', 'CHR-F1-OP20-2'),
+#('04553BD24B7780', 'CHR-F3-1');
