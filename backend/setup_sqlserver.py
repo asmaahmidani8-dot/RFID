@@ -92,6 +92,8 @@ def creer_tables(conn):
         CREATE TABLE rfid_cards (
             uid             VARCHAR(30)  NOT NULL PRIMARY KEY,
             chariot_id      VARCHAR(20)  NOT NULL,
+            badge_type      VARCHAR(5)   NOT NULL DEFAULT 'START'
+                            CHECK (badge_type IN ('START','END')),
             actif           BIT          DEFAULT 1,
             enregistre_le   DATETIME     DEFAULT GETDATE(),
             enregistre_par  VARCHAR(30),
@@ -263,7 +265,8 @@ def mettre_a_jour_tables(conn):
 
     mises_a_jour = [
         # Format : (table, colonne, définition SQL)
-        ("chariots", "type_chariot", "VARCHAR(10) DEFAULT 'RM' CHECK (type_chariot IN ('RM','RIP'))"),
+        ("chariots",    "type_chariot", "VARCHAR(10) DEFAULT 'RM' CHECK (type_chariot IN ('RM','RIP'))"),
+        ("rfid_cards",  "badge_type",   "VARCHAR(5) NOT NULL DEFAULT 'START' CHECK (badge_type IN ('START','END'))"),
     ]
 
     if not mises_a_jour:
@@ -279,6 +282,70 @@ def mettre_a_jour_tables(conn):
 
     conn.commit()
     print("Mise à jour terminée ✓")
+
+
+# ─── ÉTAPE 4 : insérer les données réelles ───────────────────────────────────
+
+def inserer_donnees(conn):
+    c = conn.cursor()
+    print("\nInsertion des données...")
+
+    # ── CHARIOTS ──────────────────────────────────────────────────────────────
+    chariots = [
+        ("CHR-F1-OP20-1", "Feeder 1 OP20 #1", "Feeder 1", "OP20", 1, "RM"),
+        ("CHR-F2-OP10-1", "Feeder 2 OP10 #1", "Feeder 2", "OP10", 1, "RM"),
+        ("CHR-F2-OP10-2", "Feeder 2 OP10 #2", "Feeder 2", "OP10", 1, "RM"),
+        ("CHR-F5-1",      "Feeder 5 #1",       "Feeder 5", "OP10", 7, "RM"),
+    ]
+    for row in chariots:
+        try:
+            c.execute("""
+                IF NOT EXISTS (SELECT 1 FROM chariots WHERE chariot_id=?)
+                INSERT INTO chariots (chariot_id,nom,station,operation_code,nb_ofs,type_chariot)
+                VALUES (?,?,?,?,?,?)
+            """, (row[0], *row))
+            print(f"  ✓ chariot {row[0]}")
+        except Exception as e:
+            print(f"  ERREUR chariot {row[0]} : {e}")
+
+    # ── SCANNER ───────────────────────────────────────────────────────────────
+    try:
+        c.execute("""
+            IF NOT EXISTS (SELECT 1 FROM rfid_scanners WHERE scanner_id='SCAN_PRINCIPAL')
+            INSERT INTO rfid_scanners (scanner_id, type_scan, ip_address, localisation)
+            VALUES ('SCAN_PRINCIPAL','SUPERMARCHE','172.20.10.5','Passage principal SMK vers ligne')
+        """)
+        print("  ✓ scanner SCAN_PRINCIPAL")
+    except Exception as e:
+        print(f"  ERREUR scanner : {e}")
+
+    # ── BADGES RFID (4 START + 4 END) ─────────────────────────────────────────
+    # START = badge avant du chariot (vers ligne)
+    # END   = badge arrière du chariot (vers SMK)
+    badges = [
+        # (uid,              chariot_id,       badge_type)
+        ("046D16D24B7780", "CHR-F1-OP20-1", "START"),
+        ("04493DD24B7780", "CHR-F1-OP20-1", "END"),
+        ("043234D24B7780", "CHR-F2-OP10-1", "START"),
+        ("047772D24B7780", "CHR-F2-OP10-1", "END"),
+        ("044643D24B7780", "CHR-F2-OP10-2", "START"),
+        ("049643D24B7780", "CHR-F2-OP10-2", "END"),
+        ("045761D24B7780", "CHR-F5-1",      "START"),
+        ("04553BD24B7780", "CHR-F5-1",      "END"),
+    ]
+    for uid, chariot_id, badge_type in badges:
+        try:
+            c.execute("""
+                IF NOT EXISTS (SELECT 1 FROM rfid_cards WHERE uid=?)
+                INSERT INTO rfid_cards (uid, chariot_id, badge_type)
+                VALUES (?,?,?)
+            """, (uid, uid, chariot_id, badge_type))
+            print(f"  ✓ badge {badge_type} {uid} → {chariot_id}")
+        except Exception as e:
+            print(f"  ERREUR badge {uid} : {e}")
+
+    conn.commit()
+    print("Données insérées ✓")
 
 
 # ─── RÉSUMÉ ───────────────────────────────────────────────────────────────────
@@ -332,6 +399,7 @@ if __name__ == "__main__":
 
     creer_tables(conn)
     mettre_a_jour_tables(conn)
+    inserer_donnees(conn)
     afficher_resume(conn)
 
     conn.close()
