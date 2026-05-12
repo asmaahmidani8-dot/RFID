@@ -34,7 +34,7 @@ SELECT
     'OP' || LPAD(wop.OPERATION_SEQ_NUM, 2, '0')           AS operation_code,
     wop.OPERATION_SEQ_NUM                                 AS op_seq,
     NVL(wop.QUANTITY_COMPLETED, 0)                        AS qty_faite,
-    wdj.SCHEDULED_QUANTITY                                AS qty_totale,
+    wdj.START_QUANTITY                                    AS qty_totale,
     wdj.SCHEDULED_COMPLETION_DATE                         AS date_besoin,
     wdj.CREATION_DATE                                     AS date_creation
 
@@ -48,19 +48,17 @@ WHERE
     wdj.WIP_ENTITY_ID    = wen.WIP_ENTITY_ID
     AND wdj.PRIMARY_ITEM_ID  = ite.INVENTORY_ITEM_ID
     AND wdj.ORGANIZATION_ID  = ite.ORGANIZATION_ID
-    AND wdj.WIP_ENTITY_ID    = wop.WIP_ENTITY_ID          -- ← jointure opérations
-    AND wdj.STATUS_TYPE      = 3                           -- ← Released
-    AND wdj.ORGANIZATION_ID  = '1731'                      -- ← BXD
+    AND wdj.WIP_ENTITY_ID    = wop.WIP_ENTITY_ID
+    AND wdj.STATUS_TYPE      = 3
+    AND wdj.ORGANIZATION_ID  = '1731'
     AND wdj.CREATION_DATE    > SYSDATE - 90
-    AND NVL(wop.QUANTITY_COMPLETED, 0) < wdj.SCHEDULED_QUANTITY  -- ← opération pas finie
+    AND NVL(wop.QUANTITY_COMPLETED, 0) < wdj.START_QUANTITY
 
 ORDER BY 
     wdj.SCHEDULED_COMPLETION_DATE ASC,
     wen.WIP_ENTITY_NAME ASC,
     wop.OPERATION_SEQ_NUM ASC
 ;
-	
- 
 
 
 Hostname

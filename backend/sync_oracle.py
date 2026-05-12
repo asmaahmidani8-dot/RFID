@@ -66,7 +66,7 @@ REQUETE_ORACLE = f"""
         SUBSTR(ite.DESCRIPTION, 1, 150)                 AS item_desc,
         'OP' || LPAD(wop.OPERATION_SEQ_NUM, 2, '0')    AS operation_code,
         wop.OPERATION_SEQ_NUM                           AS operation_seq,
-        wdj.START_QUANTITY                              AS qty,
+        wdj.START_QUANTITY                              AS qty_totale,
         wdj.SCHEDULED_COMPLETION_DATE                   AS date_besoin
     FROM
         apps.WIP_DISCRETE_JOBS  wdj,
@@ -81,7 +81,7 @@ REQUETE_ORACLE = f"""
         AND wdj.STATUS_TYPE      = 3
         AND wdj.ORGANIZATION_ID  = '{ORGANIZATION_ID}'
         AND wdj.CREATION_DATE    > SYSDATE - {JOURS_HISTORIQUE}
-        AND NVL(wop.QUANTITY_COMPLETED, 0) < wdj.START_QUANTITY
+        AND NVL(wop.QUANTITY_COMPLETED, 0) < wdj.START_QUANTITY   -- opération pas finie
     ORDER BY
         wdj.SCHEDULED_COMPLETION_DATE ASC,
         wen.WIP_ENTITY_NAME ASC,
@@ -174,7 +174,7 @@ def synchroniser(conn_oracle, conn_sql):
     for row in rows:
         if mode == "complet":
             # of_number, item_code, item_desc, operation_code, op_seq, qty, date_besoin
-            of_number, item_code, item_desc, operation_code, op_seq, qty, date_besoin = row
+            of_number, item_code, item_desc, operation_code, op_seq, qty, date_besoin = row  # qty = START_QUANTITY
         else:
             # Mode simple : pas d'opération connue → on écrit OP00 (inconnu)
             of_number, item_code, item_desc, qty, date_besoin = row
