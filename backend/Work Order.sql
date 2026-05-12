@@ -26,18 +26,39 @@ ORDER BY
     wdj.SCHEDULED_COMPLETION_DATE ASC
 ;
 
+-- OFs Released (org 1731) avec TOUTES leurs opérations ouvertes
+SELECT 
+    wen.WIP_ENTITY_NAME                                   AS num_job,
+    ite.SEGMENT1                                          AS item_code,
+    ite.DESCRIPTION                                       AS description,
+    'OP' || LPAD(wop.OPERATION_SEQ_NUM, 2, '0')           AS operation_code,
+    wop.OPERATION_SEQ_NUM                                 AS op_seq,
+    NVL(wop.QUANTITY_COMPLETED, 0)                        AS qty_faite,
+    wdj.SCHEDULED_QUANTITY                                AS qty_totale,
+    wdj.SCHEDULED_COMPLETION_DATE                         AS date_besoin,
+    wdj.CREATION_DATE                                     AS date_creation
 
-Connection name
-	
-gltest
+FROM 
+    apps.WIP_DISCRETE_JOBS   wdj,
+    apps.WIP_ENTITIES        wen,
+    apps.MTL_SYSTEM_ITEMS_B  ite,
+    apps.WIP_OPERATIONS      wop
 
+WHERE 
+    wdj.WIP_ENTITY_ID    = wen.WIP_ENTITY_ID
+    AND wdj.PRIMARY_ITEM_ID  = ite.INVENTORY_ITEM_ID
+    AND wdj.ORGANIZATION_ID  = ite.ORGANIZATION_ID
+    AND wdj.WIP_ENTITY_ID    = wop.WIP_ENTITY_ID          -- ← jointure opérations
+    AND wdj.STATUS_TYPE      = 3                           -- ← Released
+    AND wdj.ORGANIZATION_ID  = '1731'                      -- ← BXD
+    AND wdj.CREATION_DATE    > SYSDATE - 90
+    AND NVL(wop.QUANTITY_COMPLETED, 0) < wdj.SCHEDULED_QUANTITY  -- ← opération pas finie
 
-Username
-	
-SSO
-
-
-Password
+ORDER BY 
+    wdj.SCHEDULED_COMPLETION_DATE ASC,
+    wen.WIP_ENTITY_NAME ASC,
+    wop.OPERATION_SEQ_NUM ASC
+;
 	
  
 

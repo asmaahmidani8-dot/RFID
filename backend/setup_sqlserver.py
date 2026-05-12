@@ -120,12 +120,13 @@ def creer_tables(conn):
         ("""
         IF NOT EXISTS (SELECT * FROM sys.tables WHERE name='jobs_planning')
         CREATE TABLE jobs_planning (
-            of_number       VARCHAR(30)  NOT NULL PRIMARY KEY,
+            id              INT          NOT NULL IDENTITY(1,1) PRIMARY KEY,
+            of_number       VARCHAR(30)  NOT NULL,
+            operation_code  VARCHAR(10)  NOT NULL,
             item_code       VARCHAR(30)  NOT NULL,
             item_desc       VARCHAR(150) NOT NULL,
             organisation    VARCHAR(10)  DEFAULT 'BXD',
             ligne           VARCHAR(20)  DEFAULT 'PRISTINA',
-            operation_code  VARCHAR(10)  NOT NULL,
             statut          VARCHAR(20)  DEFAULT 'RELEASED'
                             CHECK (statut IN (
                                 'RELEASED','ASSIGNE','EN_APPROCHE',
@@ -133,7 +134,8 @@ def creer_tables(conn):
                             )),
             qty             INT          DEFAULT 1,
             date_besoin     DATE,
-            date_import     DATETIME     DEFAULT GETDATE()
+            date_import     DATETIME     DEFAULT GETDATE(),
+            UNIQUE (of_number, operation_code)
         )
         """, "jobs_planning"),
 
