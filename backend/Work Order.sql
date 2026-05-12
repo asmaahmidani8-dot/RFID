@@ -25,3 +25,36 @@ WHERE
 ORDER BY 
     wdj.SCHEDULED_COMPLETION_DATE ASC
 ;
+
+
+Connection name
+	
+gltest
+
+
+Username
+	
+SSO
+
+
+Password
+	
+ 
+
+
+Hostname
+	
+qahceaexa-scan.ge-healthcare.net
+
+
+Port
+	
+1521
+
+
+Choose Service name
+
+
+Service name
+	
+ebs_gltest

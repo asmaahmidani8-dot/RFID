@@ -1,0 +1,457 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+import urllib.request
+import urllib.parse
+import pymysql.cursors
+from concurrent.futures import ThreadPoolExecutor
+import time as time_module
+from datetime import datetime,time
+
+
+class LogPublish:
+    def sendLog(self, threadNo, kbn, msg):
+        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        print("modality=LOCAL~hostname=" + str(threadNo) + "~kbn=" + str(kbn) + "~msg=" + str(msg) + "~now=" + now)
+
+# -------- 本番 --------
+# RE-IP 対応済み
+url = 'http://ctd-hino.compute.ge-healthcare.net/OracleAutoTransaction/WebApp/php/exeOracleAutoTransaction.php'
+# DB設定
+# RE-IP 対応済み
+DB_HOST ='10.190.221.130'
+DB_USER ='mfg_digital'
+DB_PASSWORD ='QsxUoeKoeDdvrKk4'
+DB_SCHEMA ='hdl_all_app'
+
+# -------- DEBUG --------
+# # RE-IP 対応済み
+# url = 'http://jptyoiswebapp01l.compute.ge-healthcare.net/fortest/OracleAutoTransaction/WebApp/php/exeOracleAutoTransaction.php'
+# # DB設定
+# # RE-IP 対応済み
+# DB_HOST ='10.190.218.186'
+# DB_USER ='dev'
+# DB_PASSWORD ='dev'
+# DB_SCHEMA ='hdl_all_app'
+# -------- DEBUG --------
+
+# テーブル設定
+TABLE_NAME_TRAN = "ORACLE_TRANSACTION_INFO"
+TABLE_NAME_KANBAN = "ORACLE_KANBAN_NO"
+TABLE_NAME_CARD = "ORACLE_CARD"
+TABLE_PERIOD = "ORACLE_UPDATE_PERIOD"
+TABLE_HISTORY = "ORACLE_TRANSACTION_HISTORY"
+TABLE_AUTO_UPDATE = "ORACLE_AUTO_UPDATE"
+TABLE_ACCOUNT = "ORACLE_ACCOUNT"
+TABLE_ORG_MASTER = "ORACLE_ORG_MASTER"
+# -------- 本番 --------
+
+# グローバル変数
+# Change the number of threads from 20 to 35
+executor = ThreadPoolExecutor(max_workers=35)
+
+# MSCA Daily Maintenance時刻 - Y.Innami 202309
+msca_maint_start = time(10, 58) # MSCAメンテナンス回避のための移倉停止開始時刻：10時58分
+msca_maint_end = time(11, 6)    # MSCAメンテナンス回避のための移倉停止終了時刻：11時6分
+
+periodFlag = {}
+
+# MSCA Daily Maintenance中かどうかのチェック True:実行可、False:実行不可
+def isMscaTransaction(log):
+    try:
+        now = datetime.now()
+        mscaStart = datetime.combine(now.date(), msca_maint_start)
+        mscaEnd = datetime.combine(now.date(), msca_maint_end)        
+        if (mscaStart <= now and mscaEnd >= now): #MSCA Daily Maintenance中は移倉実行禁止 Y.Innami 202309
+            return False
+        else:
+            return True
+        
+    except Exception as e:
+        log.sendLog("Transaction", "error", str(e))
+        return False
+
+# 禁止期間かどうかのチェック True:実行可、False:実行不可
+def isExecTransaction(log):
+    try:
+        connection = pymysql.connect(host=DB_HOST,
+                                    user=DB_USER,
+                                    password=DB_PASSWORD,
+                                    db=DB_SCHEMA,
+                                    charset='utf8',
+                                    cursorclass=pymysql.cursors.DictCursor)
+        try:
+            now = datetime.now()
+            nowDateTime = now.strftime("%Y-%m-%d %H:%M:%S")
+            periodFlags = {}
+
+            # ORG_MASTER と禁止期間テーブルを JOIN し、1回のSQLで取得
+            with connection.cursor() as cursor:
+                sql = "SELECT \
+                            org.ORG_ID as orgID, \
+                            COUNT(period.ORG_ID) as periodCount \
+                        FROM \
+                            " + TABLE_ORG_MASTER + " org \
+                            LEFT JOIN " + TABLE_PERIOD + " period \
+                                ON org.ORG_ID = period.ORG_ID \
+                                AND period.DateTime_From <= %s \
+                                AND period.DateTime_To >= %s \
+                        WHERE \
+                            org.IS_ACTIVE = 1 \
+                        GROUP BY \
+                            org.ORG_ID \
+                        ORDER BY \
+                            org.ORG_ID;"
+                cursor.execute(sql, (nowDateTime, nowDateTime))
+                results = cursor.fetchall()
+
+            for row in results:
+                # periodCount > 0 の場合は禁止期間中
+                periodFlags[row["orgID"]] = (row["periodCount"] == 0)
+            
+            return periodFlags
+        finally:
+            connection.close()
+    except pymysql.err.OperationalError as e:
+        log.sendLog("Transaction", "error", str(e) + ":DB接続エラー")
+        return {}
+
+# 自動移倉処理実行
+def execTransaction(log):
+    futures = []
+    count = 1
+    for r in getTransaction(log):
+
+        # 禁止期間かチェック
+        orgID = r["orgID"]
+        if orgID not in periodFlag or not periodFlag[orgID]:
+            continue
+
+        # アカウントロック
+        result = lockAccount(count)
+        # アカウントが取得できなかった場合break
+        if result[0] == "0":
+            break
+        log.sendLog("Thread" + str(count), "info", ("アカウントロック:" + result[0]))
+        log.sendLog("Thread" + str(count), "info", ("処理データ:" + r["kanbanNo"]))
+        # Thread処理
+        future = executor.submit(callPhp, result[0], result[1], "1", "0", r["cardID"], r["kanbanNo"], r["hostName"], r["orgID"], r["tranTeam"], r["kanbanName"], r["quantity"], r["type"], r["locator"], r["sequenceNo"], count)
+        futures.append(future)
+        count += 1
+
+    # 処理結果待ち
+    count = 1
+    for future in futures:
+        log.sendLog("Thread" + str(count), "info", future.result())
+        count += 1
+
+# 自動移倉処理データ取得
+def getTransaction(log):
+    try:
+        connection = pymysql.connect(host=DB_HOST,
+                                    user=DB_USER,
+                                    password=DB_PASSWORD,
+                                    db=DB_SCHEMA,
+                                    charset='utf8',
+                                    cursorclass=pymysql.cursors.DictCursor)
+        try:
+            with connection.cursor() as cursor:
+                sql = "SELECT \
+                            tran.Card_ID as cardID, \
+                            tran.Exe_Flag as exeFlag, \
+                            tran.Exe_Datetime as exeDatetime, \
+                            tran.Quantity as quantity, \
+                            tran.Locator as locator, \
+                            tran.ORG_ID as orgID, \
+                            tran.Team as tranTeam, \
+                            tran.Kanban_No as kanbanNo, \
+                            tran.Sequence_No as sequenceNo, \
+                            tran.Host_Name as hostName, \
+                            0 as oracleFlag, \
+                            card.Team as team, \
+                            card.Kanban_Name as kanbanName, \
+                            card.Type as type \
+                        FROM \
+                            " + TABLE_NAME_TRAN + " tran \
+                            LEFT JOIN \
+                            " + TABLE_NAME_KANBAN + " kanban \
+                            ON \
+                            tran.Card_ID = kanban.Card_ID \
+                            AND tran.Kanban_No = kanban.Kanban_No \
+                            LEFT JOIN \
+                            " + TABLE_NAME_CARD + " card \
+                            ON \
+                            tran.Card_ID = card.Card_ID \
+                        WHERE \
+                            tran.Exe_Flag = 1 \
+                        ORDER BY \
+                            tran.LastUpdate, tran.Sequence_No, tran.Kanban_No \
+                        LIMIT 35;"
+                cursor.execute(sql)
+                return cursor.fetchall()
+        finally:
+            connection.close()
+    except pymysql.err.OperationalError as e:
+        log.sendLog("Transaction", "error", str(e) + ":DB接続エラー")
+        return []
+
+
+# Errorデータ自動処理実行
+def execAutoUpdate(log):
+    # 現在の時間が自動処理をする時間かチェック
+    nowHour = int(datetime.now().strftime("%H"))
+    autoUpdateFlag = False
+    for auto in getAutoUpdateTime(log):
+        if nowHour == int(auto["updateHour"]):
+            autoUpdateFlag = True
+            log.sendLog("Transaction", "info", datetime.now().strftime("%Y-%m-%d %H:%M:%S") + ":AutoUpdate時間 " + str(nowHour) + "時")
+    
+    if not autoUpdateFlag:
+        return
+
+    futures = []
+    count = 1
+    # Errorデータ取得
+    for r in getErrorHistory(nowHour, log):
+
+        # 禁止期間かチェック
+        orgID = r["orgID"]
+        if orgID not in periodFlag or not periodFlag[orgID]:
+            continue
+
+        # アカウントロック
+        result = lockAccount(count)
+        # アカウントが取得できなかった場合break
+        if result[0] == "0":
+            break
+        log.sendLog("Thread" + str(count), "info", "アカウントロック:" + result[0])
+        log.sendLog("Thread" + str(count), "info", "処理データ:" + r["kanbanNo"])
+        # Thread処理
+        future = executor.submit(callPhp, result[0], result[1], "0", r["inputID"], r["cardID"], r["kanbanNo"], r["hostName"] ,r["orgID"], r["team"], r["kanbanName"], r["quantity"], r["type"], r["locator"], "0", count)
+        futures.append(future)
+        count += 1
+
+    # 処理結果待ち
+    count = 1
+    for future in futures:
+        log.sendLog("Thread" + str(count), "info", future.result())
+        count += 1
+
+# Errorデータ自動処理時間取得
+def getAutoUpdateTime(log):
+    try:
+        connection = pymysql.connect(host=DB_HOST,
+                                    user=DB_USER,
+                                    password=DB_PASSWORD,
+                                    db=DB_SCHEMA,
+                                    charset='utf8',
+                                    cursorclass=pymysql.cursors.DictCursor)
+        try:
+            with connection.cursor() as cursor:
+                sql = "SELECT \
+                            auto.Update_ID as updateID, \
+                            HOUR(auto.Auto_Update) as updateHour,\
+                            auto.Exe_Date as exeDate \
+                        FROM \
+                            " + TABLE_AUTO_UPDATE + " auto;"
+                cursor.execute(sql)
+                return cursor.fetchall()
+        finally:
+            connection.close()
+    except pymysql.err.OperationalError as e:
+        log.sendLog("Transaction", "error", str(e) + ":DB接続エラー")
+        return []
+
+# Errorデータ取得
+def getErrorHistory(execHour, log):
+    try:
+        connection = pymysql.connect(host=DB_HOST,
+                                    user=DB_USER,
+                                    password=DB_PASSWORD,
+                                    db=DB_SCHEMA,
+                                    charset='utf8',
+                                    cursorclass=pymysql.cursors.DictCursor)
+        try:
+            with connection.cursor() as cursor:
+                sql = "	SELECT \
+                            history.Input_No as inputID, \
+                            history.Card_ID as cardID, \
+                            history.Kanban_No as kanbanNo, \
+                            history.Oracle_Flag as oracleFlag, \
+                            history.Host_Name as hostName, \
+                            history.Quantity as quantity, \
+                            history.Locator as locator, \
+                            history.ORG_ID as orgID, \
+                            history.Team as team, \
+                            history.lastUpdate as lastUpdate, \
+                            card.Kanban_Name as kanbanName, \
+                            card.Type as type \
+                        FROM \
+                            " + TABLE_HISTORY + " history \
+                            LEFT JOIN \
+                            " + TABLE_NAME_CARD + " card \
+                            ON \
+                            history.Card_ID = card.Card_ID \
+                        WHERE \
+                            history.Oracle_Flag <> 3 \
+                            and history.Manual_Flag <> 1 \
+                            and (history.Exe_Time IS NULL or history.Exe_Time <> %s) \
+                        ORDER BY history.LastUpdate \
+                        LIMIT 35;"
+                cursor.execute(sql, (execHour))
+                return cursor.fetchall()
+        finally:
+            connection.close()
+    except pymysql.err.OperationalError as e:
+        log.sendLog("Transaction", "error", str(e) + ":DB接続エラー")
+        return []
+
+# Oracleアカウントロック
+def lockAccount(accountHost):
+    for r in selectAccount():
+        updateAccount(r["accountNo"], accountHost)
+        return r["userID"], r["password"]
+    return "0", "Account Not Exist"
+
+# アカウント取得
+def selectAccount():
+    connection = pymysql.connect(host=DB_HOST,
+                                user=DB_USER,
+                                password=DB_PASSWORD,
+                                db=DB_SCHEMA,
+                                charset='utf8',
+                                cursorclass=pymysql.cursors.DictCursor)
+    try:
+        with connection.cursor() as cursor:
+            sql = "	SELECT \
+                        account.Account_No as accountNo, \
+                        CONVERT(AES_DECRYPT(UNHEX(account.User_ID), 'oracle') USING UTF8) as userID, \
+                        CONVERT(AES_DECRYPT(UNHEX(account.Password), 'oracle') USING UTF8) as password \
+                    FROM " + TABLE_ACCOUNT + " account \
+                    WHERE account.Use_Flag = 0 \
+                    ORDER BY account.Account_No \
+                    LIMIT 1;"
+            cursor.execute(sql)
+            return cursor.fetchall()
+    finally:
+        connection.close()
+
+# OracleアカウントロックのためにUpdate
+def updateAccount(accountNo, accountHost):
+    connection = pymysql.connect(host=DB_HOST,
+                                user=DB_USER,
+                                password=DB_PASSWORD,
+                                db=DB_SCHEMA,
+                                charset='utf8',
+                                cursorclass=pymysql.cursors.DictCursor)
+    try:
+        with connection.cursor() as cursor:
+            sql = "	UPDATE " + TABLE_ACCOUNT + " SET  \
+                    Use_Flag = 1, \
+                    Host_Name = %s, \
+                    Lastupdate = %s \
+                    WHERE Account_No = %s \
+                    AND Use_Flag = 0;"
+            cursor.execute(sql, (accountHost, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), accountNo))
+            return cursor.fetchall()
+    finally:
+        connection.commit()
+        connection.close()
+
+# 自動移倉PHPを呼び出し
+def callPhp(userID, password, autoFlag, inputNo, cardID, kanbanNo, hostName, orgID, teamID, kanbanName, quantity, exeType, locator, sequenceNo, accountHost):
+    if cardID == "1" or cardID == "2":
+        exeType = '2'
+    
+    # 送信パラメーター
+    data = {
+        'CardID': cardID,
+        'KanbanNo':kanbanNo,
+        'OracleFlag':'0',
+        'HostName':hostName,
+        'AutoFlag':autoFlag,
+        'TeamID':teamID,
+        'orgID':orgID,
+        'inputNo':inputNo,
+        'kanbanName':kanbanName,
+        'userID':userID,
+        'password':password,
+        'quantity':quantity,
+        'type':exeType,
+        'locator': locator,
+        'sequenceNo':sequenceNo,
+        'accountHostName':accountHost
+    }
+
+    # 送信パラメーターのurlエンコード実行
+    postdata = urllib.parse.urlencode(data)
+    # 送信データはbyte配列に変換
+    postbyte = postdata.encode('utf-8')
+
+    body = ""
+    try:
+        # postリクエストを実行
+        response = urllib.request.urlopen(url, postbyte)
+        # read()で応答を取得
+        # 取得できるのはbyte配列なので、decodeで文字列に変換
+        body = response.read().decode('utf-8')
+    
+    except urllib.error.HTTPError as e:
+        body = "PHP接続エラー"
+
+    return body
+
+if __name__ == '__main__':
+    log = LogPublish()
+
+    while True:
+    
+        # MSCA Daily Maintenance中でない場合
+        if isMscaTransaction(log):
+
+            # 禁止期間かチェック
+            periodFlag = isExecTransaction(log)
+            
+            # DB接続エラーなどで periodFlag が空の場合は警告ログを出力
+            if not periodFlag:
+                log.sendLog("Transaction", "warn", "禁止期間チェック失敗: DB接続エラーまたはOrg情報なし。本サイクルの処理をスキップします")
+            else:
+                # 自動移倉処理
+                execTransaction(log)
+                # Errorデータ処理
+                execAutoUpdate(log)
+        
+        # 次の実行まで10秒まつ
+        time_module.sleep(10)
+    
+    Connection name
+	
+#gltest
+
+
+#Username
+	
+#SSO
+
+
+#Password
+	
+ 
+
+
+#Hostname
+	
+#qahceaexa-scan.ge-healthcare.net
+
+
+#Port
+	
+#1521
+
+
+#Choose Service name
+
+
+#Service name
+	
+# ebs_gltest
