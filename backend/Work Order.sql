@@ -77,3 +77,4 @@ Choose Service name
 Service name
 	
 ebs_gltest
+pip install flask pyodbc oracledb apscheduler python-dotenv
