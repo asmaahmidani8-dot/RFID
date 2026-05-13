@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RFID Pristina — Water Spider</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #1a1a2e;
+      color: #eee;
+      min-height: 100vh;
+    }
+
+    /* ── HEADER ── */
+    header {
+      background: #16213e;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 3px solid #0f3460;
+    }
+    header h1 {
+      font-size: 1.3rem;
+      color: #e94560;
+      letter-spacing: 1px;
+    }
+    #refresh-info {
+      font-size: 0.8rem;
+      color: #888;
+    }
+    #refresh-dot {
+      display: inline-block;
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #27ae60;
+      margin-right: 6px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%,100% { opacity: 1; }
+      50%      { opacity: 0.3; }
+    }
+
+    /* ── STATS BAR ── */
+    #stats-bar {
+      display: flex;
+      gap: 12px;
+      padding: 12px 24px;
+      background: #16213e;
+      border-bottom: 1px solid #0f3460;
+    }
+    .stat-chip {
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-size: 0.82rem;
+      font-weight: 600;
+    }
+    .chip-approche  { background: #e67e22; color: #fff; }
+    .chip-attente   { background: #2980b9; color: #fff; }
+    .chip-total     { background: #555;    color: #fff; }
+
+    /* ── MAIN TABLE ── */
+    main { padding: 20px 24px; }
+
+    #no-missions {
+      text-align: center;
+      padding: 60px 0;
+      color: #555;
+      font-size: 1.1rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+    }
+    thead th {
+      background: #0f3460;
+      color: #aac;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 0.75rem;
+      letter-spacing: 0.5px;
+    }
+    tbody tr {
+      border-bottom: 1px solid #222;
+      transition: background 0.2s;
+    }
+    tbody tr:hover { background: #1e2a45; }
+    tbody td { padding: 12px 14px; vertical-align: middle; }
+
+    /* ── STATUT BADGE ── */
+    .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-approche { background: #e67e22; color: #fff; }
+    .badge-attente  { background: #2980b9; color: #fff; }
+
+    /* ── CHARIOT ── */
+    .chariot-nom { font-weight: 700; color: #fff; }
+    .chariot-id  { font-size: 0.75rem; color: #888; margin-top: 2px; }
+
+    /* ── OF CELL ── */
+    .of-auto {
+      background: #1a3a2a;
+      border: 1px solid #27ae60;
+      border-radius: 6px;
+      padding: 6px 10px;
+    }
+    .of-auto .of-num { font-weight: 700; color: #2ecc71; }
+    .of-auto .of-desc { font-size: 0.75rem; color: #aaa; margin-top: 2px; }
+    .of-auto .of-label {
+      font-size: 0.68rem;
+      background: #27ae60;
+      color: #fff;
+      padding: 1px 6px;
+      border-radius: 8px;
+      margin-bottom: 4px;
+      display: inline-block;
+    }
+
+    .of-choix select {
+      background: #1a2a3a;
+      color: #fff;
+      border: 1px solid #2980b9;
+      border-radius: 6px;
+      padding: 6px 8px;
+      width: 100%;
+      font-size: 0.85rem;
+    }
+    .of-choix .choix-label {
+      font-size: 0.72rem;
+      color: #2980b9;
+      margin-bottom: 4px;
+    }
+
+    .of-vide {
+      color: #e74c3c;
+      font-size: 0.85rem;
+      font-style: italic;
+    }
+
+    /* ── HEURE ── */
+    .heure { font-size: 0.88rem; color: #aaa; }
+    .heure-val { font-weight: 700; color: #fff; }
+
+    /* ── BOUTONS ── */
+    .btn {
+      padding: 8px 18px;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn:hover  { opacity: 0.85; }
+    .btn:active { transform: scale(0.97); }
+    .btn-valider  { background: #27ae60; color: #fff; }
+    .btn-assigner { background: #e67e22; color: #fff; }
+    .btn-disabled { background: #444; color: #888; cursor: not-allowed; }
+
+    /* ── MODAL ── */
+    #modal-overlay {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.7);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #modal-overlay.active { display: flex; }
+    #modal {
+      background: #16213e;
+      border: 1px solid #0f3460;
+      border-radius: 12px;
+      padding: 28px 32px;
+      width: 420px;
+      max-width: 95vw;
+    }
+    #modal h2 { font-size: 1.1rem; margin-bottom: 18px; color: #e94560; }
+    .modal-field { margin-bottom: 14px; }
+    .modal-field label {
+      display: block;
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-bottom: 5px;
+    }
+    .modal-field input, .modal-field select {
+      width: 100%;
+      background: #1a2a3a;
+      color: #fff;
+      border: 1px solid #0f3460;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.9rem;
+    }
+    .modal-btns { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-btns button { flex: 1; padding: 10px; }
+    #btn-annuler { background: #444; color: #fff; }
+
+    /* ── TOAST ── */
+    #toast {
+      position: fixed;
+      bottom: 24px; right: 24px;
+      padding: 12px 22px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 200;
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok  { background: #27ae60; color: #fff; }
+    #toast.err { background: #e74c3c; color: #fff; }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ── -->
+<header>
+  <h1>🏭 RFID PRISTINA — Water Spider</h1>
+  <div id="refresh-info">
+    <span id="refresh-dot"></span>
+    Mise à jour toutes les <strong>5 sec</strong>
+  </div>
+</header>
+
+<!-- ── STATS BAR ── -->
+<div id="stats-bar">
+  <span class="stat-chip chip-total"   id="stat-total">Total : 0</span>
+  <span class="stat-chip chip-approche" id="stat-approche">En approche : 0</span>
+  <span class="stat-chip chip-attente"  id="stat-attente">En attente : 0</span>
+</div>
+
+<!-- ── TABLE ── -->
+<main>
+  <div id="no-missions">Aucun chariot en approche pour l'instant…</div>
+  <table id="table-missions" style="display:none;">
+    <thead>
+      <tr>
+        <th>Statut</th>
+        <th>Chariot</th>
+        <th>Opération</th>
+        <th>Arrivé à</th>
+        <th>OF assigné</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</main>
+
+<!-- ── MODAL VALIDATION ── -->
+<div id="modal-overlay">
+  <div id="modal">
+    <h2>✅ Valider la mission</h2>
+    <input type="hidden" id="modal-mission-id">
+    <input type="hidden" id="modal-of-number">
+
+    <div class="modal-field">
+      <label>Chariot</label>
+      <input type="text" id="modal-chariot" readonly style="color:#aaa;">
+    </div>
+    <div class="modal-field">
+      <label>OF assigné</label>
+      <input type="text" id="modal-of-display" readonly style="color:#2ecc71; font-weight:700;">
+    </div>
+    <div class="modal-field">
+      <label>Poste de travail</label>
+      <select id="modal-poste">
+        <option value="">-- Choisir un poste --</option>
+        <option value="WS01">WS01</option>
+        <option value="WS02">WS02</option>
+        <option value="WS03">WS03</option>
+        <option value="WS04">WS04</option>
+        <option value="WS05">WS05</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Emplacement (slot)</label>
+      <select id="modal-emplacement">
+        <option value="1">Slot 1</option>
+        <option value="2">Slot 2</option>
+        <option value="3">Slot 3</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Opérateur (optionnel)</label>
+      <input type="text" id="modal-operateur" placeholder="Badge / nom opérateur">
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-valider" onclick="confirmerValidation()">✅ VALIDER</button>
+      <button class="btn" id="btn-annuler" onclick="fermerModal()">Annuler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOAST ── -->
+<div id="toast"></div>
+
+<script>
+  const API = '';   // même serveur Flask — laisser vide
+
+  let missions      = [];
+  let jobsCache     = {};   // cache : operation_code → liste jobs
+
+  // ── CHARGEMENT DES MISSIONS ───────────────────────────────────────────────
+  async function chargerMissions() {
+    try {
+      const r = await fetch(API + '/api/ws/missions-en-attente');
+      const d = await r.json();
+      if (d.status !== 'ok') return;
+
+      missions = d.missions;
+      afficherMissions();
+      majStats();
+    } catch(e) {
+      console.error('Erreur chargement missions', e);
+    }
+  }
+
+  // ── CHARGEMENT JOBS DISPONIBLES ───────────────────────────────────────────
+  async function chargerJobs(operationCode) {
+    if (jobsCache[operationCode]) return jobsCache[operationCode];
+    try {
+      const r = await fetch(API + '/api/ws/jobs-disponibles?operation_code=' + operationCode);
+      const d = await r.json();
+      jobsCache[operationCode] = d.status === 'ok' ? d.jobs : [];
+      return jobsCache[operationCode];
+    } catch(e) { return []; }
+  }
+
+  // ── AFFICHAGE TABLE ───────────────────────────────────────────────────────
+  async function afficherMissions() {
+    const tbody = document.getElementById('tbody');
+    const table = document.getElementById('table-missions');
+    const noMsg = document.getElementById('no-missions');
+
+    if (missions.length === 0) {
+      table.style.display = 'none';
+      noMsg.style.display = 'block';
+      return;
+    }
+    table.style.display = 'table';
+    noMsg.style.display = 'none';
+
+    tbody.innerHTML = '';
+
+    for (const m of missions) {
+      const tr = document.createElement('tr');
+
+      // Statut badge
+      const badgeCls = m.statut === 'EN_APPROCHE' ? 'badge-approche' : 'badge-attente';
+      const badgeTxt = m.statut === 'EN_APPROCHE' ? '🟡 En approche' : '🔵 En attente';
+
+      // Heure arrivée
+      const heure = m.ts_scan1 ? m.ts_scan1.substring(11, 16) : '--:--';
+
+      // Cellule OF
+      let celluleOF = '';
+      let btnAction = '';
+
+      if (m.jobs && m.jobs.length === 1) {
+        // ── AUTO : 1 seul job pré-assigné ────────────────────────────────
+        const j = m.jobs[0];
+        celluleOF = `
+          <div class="of-auto">
+            <div class="of-label">✅ Auto-assigné</div>
+            <div class="of-num">${j.of_number}</div>
+            <div class="of-desc">${j.item_code} — ${j.item_desc ? j.item_desc.substring(0,40) : ''}</div>
+          </div>`;
+        btnAction = `<button class="btn btn-valider"
+                       onclick="ouvrirModal(${m.mission_id},'${m.chariot_id}','${j.of_number}','${j.of_number}')">
+                       ✅ Valider
+                     </button>`;
+
+      } else if (m.jobs && m.jobs.length > 1) {
+        // ── DÉJÀ CHOISI (plusieurs jobs) ─────────────────────────────────
+        const j = m.jobs[0];
+        celluleOF = `
+          <div class="of-auto">
+            <div class="of-label">✅ Assigné</div>
+            <div class="of-num">${j.of_number}</div>
+            <div class="of-desc">${j.item_code}</div>
+          </div>`;
+        btnAction = `<button class="btn btn-valider"
+                       onclick="ouvrirModal(${m.mission_id},'${m.chariot_id}','${j.of_number}','${j.of_number}')">
+                       ✅ Valider
+                     </button>`;
+
+      } else {
+        // ── CHOIX WS ou AUCUN JOB ────────────────────────────────────────
+        const jobs = await chargerJobs(m.operation_code);
+
+        if (jobs.length === 0) {
+          celluleOF = `<div class="of-vide">⚠ Aucun OF disponible</div>`;
+          btnAction = `<button class="btn btn-disabled" disabled>En attente Oracle</button>`;
+
+        } else if (jobs.length === 1) {
+          // 1 seul job → auto
+          const j = jobs[0];
+          celluleOF = `
+            <div class="of-auto">
+              <div class="of-label">✅ Auto-assigné</div>
+              <div class="of-num">${j.of_number}</div>
+              <div class="of-desc">${j.item_code}</div>
+            </div>`;
+          btnAction = `<button class="btn btn-valider"
+                         onclick="assignerEtValider(${m.mission_id},'${m.chariot_id}','${j.of_number}','${m.operation_code}')">
+                         ✅ Valider
+                       </button>`;
+
+        } else {
+          // Plusieurs → WS choisit
+          const options = jobs.map(j =>
+            `<option value="${j.of_number}">${j.of_number} — ${j.item_code} (${j.date_besoin || '?'})</option>`
+          ).join('');
+          celluleOF = `
+            <div class="of-choix">
+              <div class="choix-label">🔽 Choisir l'OF :</div>
+              <select id="sel-${m.mission_id}">${options}</select>
+            </div>`;
+          btnAction = `<button class="btn btn-assigner"
+                         onclick="assignerChoix(${m.mission_id},'${m.chariot_id}','${m.operation_code}')">
+                         Assigner →
+                       </button>`;
+        }
+      }
+
+      tr.innerHTML = `
+        <td><span class="badge ${badgeCls}">${badgeTxt}</span></td>
+        <td>
+          <div class="chariot-nom">${m.chariot_nom}</div>
+          <div class="chariot-id">${m.chariot_id} — ${m.operation_code}</div>
+        </td>
+        <td><strong>${m.operation_code}</strong></td>
+        <td>
+          <div class="heure">Scan 1 : <span class="heure-val">${heure}</span></div>
+        </td>
+        <td>${celluleOF}</td>
+        <td>${btnAction}</td>
+      `;
+      tbody.appendChild(tr);
+    }
+  }
+
+  // ── STATS ─────────────────────────────────────────────────────────────────
+  function majStats() {
+    const nb_approche = missions.filter(m => m.statut === 'EN_APPROCHE').length;
+    const nb_attente  = missions.filter(m => m.statut === 'EN_ATTENTE').length;
+    document.getElementById('stat-total').textContent    = `Total : ${missions.length}`;
+    document.getElementById('stat-approche').textContent = `En approche : ${nb_approche}`;
+    document.getElementById('stat-attente').textContent  = `En attente : ${nb_attente}`;
+  }
+
+  // ── ASSIGNER + VALIDER (1 job auto depuis le WS) ──────────────────────────
+  async function assignerEtValider(missionId, chariotId, ofNumber, opCode) {
+    // 1. Assigner le job
+    const r = await fetch(API + '/api/ws/assigner-job', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ mission_id: missionId, of_number: ofNumber, ws_id: 'WS_ECRAN' })
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') { toast('Erreur : ' + d.message, 'err'); return; }
+
+    // 2. Ouvrir modal pour valider
+    ouvrirModal(missionId, chariotId, ofNumber, ofNumber);
+  }
+
+  // ── ASSIGNER CHOIX WS ─────────────────────────────────────────────────────
+  async function assignerChoix(missionId, chariotId, opCode) {
+    const sel = document.getElementById('sel-' + missionId);
+    if (!sel || !sel.value) { toast('Choisir un OF', 'err'); return; }
+    const ofNumber = sel.value;
+
+    const r = await fetch(API + '/api/ws/assigner-job', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ mission_id: missionId, of_number: ofNumber, ws_id: 'WS_ECRAN' })
+    });
+    const d = await r.json();
+    if (d.status !== 'ok') { toast('Erreur : ' + d.message, 'err'); return; }
+
+    toast('OF ' + ofNumber + ' assigné ✅', 'ok');
+    jobsCache = {};   // vider le cache
+    ouvrirModal(missionId, chariotId, ofNumber, ofNumber);
+  }
+
+  // ── MODAL ─────────────────────────────────────────────────────────────────
+  function ouvrirModal(missionId, chariotId, ofDisplay, ofNumber) {
+    document.getElementById('modal-mission-id').value  = missionId;
+    document.getElementById('modal-of-number').value   = ofNumber;
+    document.getElementById('modal-chariot').value     = chariotId;
+    document.getElementById('modal-of-display').value  = ofDisplay;
+    document.getElementById('modal-operateur').value   = '';
+    document.getElementById('modal-poste').value       = '';
+    document.getElementById('modal-overlay').classList.add('active');
+  }
+
+  function fermerModal() {
+    document.getElementById('modal-overlay').classList.remove('active');
+  }
+
+  async function confirmerValidation() {
+    const missionId  = document.getElementById('modal-mission-id').value;
+    const posteId    = document.getElementById('modal-poste').value;
+    const emplacement= document.getElementById('modal-emplacement').value;
+    const operateur  = document.getElementById('modal-operateur').value;
+
+    if (!posteId) { toast('Choisir un poste', 'err'); return; }
+
+    const r = await fetch(API + '/api/ws/valider', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        mission_id   : parseInt(missionId),
+        poste_id     : posteId,
+        emplacement  : parseInt(emplacement),
+        operateur_id : operateur || null,
+        ws_id        : 'WS_ECRAN',
+      })
+    });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      toast('Mission validée → ' + posteId + ' ✅', 'ok');
+      fermerModal();
+      jobsCache = {};
+      await chargerMissions();
+    } else {
+      toast('Erreur : ' + d.message, 'err');
+    }
+  }
+
+  // ── TOAST ─────────────────────────────────────────────────────────────────
+  function toast(msg, type) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'show ' + type;
+    setTimeout(() => t.className = '', 3000);
+  }
+
+  // ── FERMER MODAL EN CLIQUANT DEHORS ───────────────────────────────────────
+  document.getElementById('modal-overlay').addEventListener('click', function(e) {
+    if (e.target === this) fermerModal();
+  });
+
+  // ── LANCEMENT ─────────────────────────────────────────────────────────────
+  chargerMissions();
+  setInterval(() => { jobsCache = {}; chargerMissions(); }, 5000);
+</script>
+</body>
+</html>

@@ -1,29 +1,137 @@
 """
 app.py — Serveur Flask RFID Pristina
-ÉTAPE 2 : Machine d'état complète avec SQL Server
 
-Flux :
-  SCAN_1 (badge START au passage SMK)
-    → mission créée (EN_APPROCHE)
-    → WS valide (EN_ATTENTE)
-  SCAN_2 (badge au passage Zone d'Attente)
-    → statut EN_ATTENTE confirmé
-    → Opérateur COMMENCER (EN_COURS)
-    → Opérateur TERMINER   (VIDE)
-  SCAN_3 (badge END retour vers SMK)
-    → RETOUR_SUPERMARKET
+Architecture industrielle :
+  Oracle EBS   : source officielle des jobs Released
+  jobs_planning : copie locale rapide (sync toutes 30s)
+  cart_missions : suivi RFID réel (SQL Server)
+
+Flux scan :
+  Scan START
+    1. Cherche job dans jobs_planning local  (rapide)
+    2. Si absent → Oracle direct fallback    (1-2s)
+    3. Si Oracle indisponible → erreur + mission en attente
+    → Crée mission dans cart_missions
+
+  Scan END
+    → Clôture mission dans cart_missions
 """
 
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
+import os
 from datetime import datetime
 import pyodbc
 import json
+import threading
+
+# APScheduler pour sync automatique
+try:
+    from apscheduler.schedulers.background import BackgroundScheduler
+    SCHEDULER_OK = True
+except ImportError:
+    SCHEDULER_OK = False
+    print("⚠ APScheduler non installé — lance : pip install apscheduler")
+
+# Oracle
+try:
+    import oracledb
+    ORACLE_OK = True
+except ImportError:
+    ORACLE_OK = False
+    print("⚠ oracledb non installé — sync Oracle désactivée")
 
 app = Flask(__name__)
+
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), '..', 'frontend')
+
+@app.route('/ws')
+def page_ws():
+    return send_from_directory(FRONTEND_DIR, 'ws.html')
+
+@app.route('/dashboard')
+def page_dashboard():
+    return send_from_directory(FRONTEND_DIR, 'dashboard.html')
 
 # ─── CONNEXION SQL SERVER ──────────────────────────────────────────────────────
 SERVER  = r"localhost\SQLEXPRESS"
 DB_NAME = "rfid_pristina"
+
+# ─── CONNEXION ORACLE ──────────────────────────────────────────────────────────
+ORACLE_USER     = "TON_USERNAME"       # ← ton username
+ORACLE_PASSWORD = "TON_PASSWORD"       # ← ton mot de passe
+ORACLE_HOST     = "qahceaexa-scan.ge-healthcare.net"
+ORACLE_PORT     = 1521
+ORACLE_SERVICE  = "ebs_gltest"
+ORGANIZATION_ID = "1731"
+
+def get_oracle():
+    """Connexion Oracle directe — temps réel."""
+    if not ORACLE_OK:
+        return None
+    try:
+        dsn = oracledb.makedsn(ORACLE_HOST, ORACLE_PORT, service_name=ORACLE_SERVICE)
+        return oracledb.connect(user=ORACLE_USER, password=ORACLE_PASSWORD, dsn=dsn)
+    except Exception as e:
+        print(f"  ⚠ Oracle connexion échouée : {e}")
+        return None
+
+
+def jobs_released_oracle(operation_code, nb_ofs, deja_assignes):
+    """
+    Interroge Oracle directement pour les jobs Released d'une opération.
+    Exclut les OFs déjà assignés dans SQL Server (deja_assignes = liste of_number).
+    Retourne une liste de dicts.
+    """
+    conn_ora = get_oracle()
+    if not conn_ora:
+        return []
+
+    try:
+        # Construire la clause d'exclusion
+        exclusions = ""
+        if deja_assignes:
+            liste = ",".join(f"'{x}'" for x in deja_assignes)
+            exclusions = f"AND wen.WIP_ENTITY_NAME NOT IN ({liste})"
+
+        sql = f"""
+            SELECT wen.WIP_ENTITY_NAME, ite.SEGMENT1,
+                   SUBSTR(ite.DESCRIPTION,1,150), wdj.START_QUANTITY,
+                   wdj.SCHEDULED_COMPLETION_DATE,
+                   'OP' || wop.OPERATION_SEQ_NUM
+            FROM   apps.WIP_DISCRETE_JOBS   wdj,
+                   apps.WIP_ENTITIES        wen,
+                   apps.MTL_SYSTEM_ITEMS_B  ite,
+                   apps.WIP_OPERATIONS      wop
+            WHERE  wdj.WIP_ENTITY_ID    = wen.WIP_ENTITY_ID
+              AND  wdj.PRIMARY_ITEM_ID  = ite.INVENTORY_ITEM_ID
+              AND  wdj.ORGANIZATION_ID  = ite.ORGANIZATION_ID
+              AND  wdj.WIP_ENTITY_ID    = wop.WIP_ENTITY_ID
+              AND  wdj.STATUS_TYPE      = 3
+              AND  wdj.ORGANIZATION_ID  = '{ORGANIZATION_ID}'
+              AND  'OP' || wop.OPERATION_SEQ_NUM = '{operation_code}'
+              AND  NVL(wop.QUANTITY_COMPLETED,0) < wdj.START_QUANTITY
+              {exclusions}
+            ORDER BY wdj.SCHEDULED_COMPLETION_DATE ASC, wen.WIP_ENTITY_NAME ASC
+            FETCH FIRST {nb_ofs} ROWS ONLY
+        """
+        c    = conn_ora.cursor()
+        rows = c.execute(sql).fetchall()
+        conn_ora.close()
+
+        return [{
+            "of_number"  : str(r[0]),
+            "item_code"  : str(r[1]),
+            "item_desc"  : str(r[2] or ""),
+            "qty"        : int(r[3]) if r[3] else 1,
+            "date_besoin": str(r[4].date()) if r[4] else None,
+            "operation_code": str(r[5]),
+        } for r in rows]
+
+    except Exception as e:
+        print(f"  ⚠ Erreur Oracle query : {e}")
+        if conn_ora:
+            conn_ora.close()
+        return []
 
 CONN_STR = (
     f"DRIVER={{ODBC Driver 17 for SQL Server}};"
@@ -35,8 +143,12 @@ CONN_STR = (
 
 
 def get_db():
-    """Retourne une connexion SQL Server."""
-    return pyodbc.connect(CONN_STR)
+    """
+    Retourne une connexion SQL Server.
+    pyodbc gère automatiquement un pool de connexions
+    → plusieurs scans simultanés = pas de problème
+    """
+    return pyodbc.connect(CONN_STR, autocommit=False)
 
 
 # ─── UTILITAIRES ──────────────────────────────────────────────────────────────
@@ -158,6 +270,254 @@ def recevoir_scan():
         return jsonify({"status": "erreur", "message": str(e)}), 500
 
 
+# ─── SYNC ORACLE → jobs_planning (toutes les 30 sec) ────────────────────────
+
+def sync_oracle_background():
+    """
+    Sync automatique Oracle → jobs_planning.
+    Tourne en arrière-plan toutes les 30 secondes.
+    """
+    if not ORACLE_OK:
+        return
+    try:
+        conn_ora = get_oracle()
+        if not conn_ora:
+            return
+
+        sql = f"""
+            SELECT wen.WIP_ENTITY_NAME, ite.SEGMENT1,
+                   SUBSTR(ite.DESCRIPTION,1,150),
+                   'OP' || wop.OPERATION_SEQ_NUM,
+                   wdj.START_QUANTITY,
+                   wdj.SCHEDULED_COMPLETION_DATE
+            FROM   apps.WIP_DISCRETE_JOBS   wdj,
+                   apps.WIP_ENTITIES        wen,
+                   apps.MTL_SYSTEM_ITEMS_B  ite,
+                   apps.WIP_OPERATIONS      wop
+            WHERE  wdj.WIP_ENTITY_ID   = wen.WIP_ENTITY_ID
+              AND  wdj.PRIMARY_ITEM_ID = ite.INVENTORY_ITEM_ID
+              AND  wdj.ORGANIZATION_ID = ite.ORGANIZATION_ID
+              AND  wdj.WIP_ENTITY_ID   = wop.WIP_ENTITY_ID
+              AND  wdj.STATUS_TYPE     = 3
+              AND  wdj.ORGANIZATION_ID = '{ORGANIZATION_ID}'
+              AND  NVL(wop.QUANTITY_COMPLETED,0) < wdj.START_QUANTITY
+            ORDER BY wdj.SCHEDULED_COMPLETION_DATE ASC
+        """
+        rows = conn_ora.cursor().execute(sql).fetchall()
+        conn_ora.close()
+
+        conn_sql = get_db()
+        c        = conn_sql.cursor()
+        now      = datetime.now()
+        nb_new   = 0
+
+        for r in rows:
+            of_number      = str(r[0])
+            item_code      = str(r[1])
+            item_desc      = str(r[2] or "")[:150]
+            operation_code = str(r[3])
+            qty            = int(r[4]) if r[4] else 1
+            date_besoin    = str(r[5].date()) if r[5] else None
+
+            existe = c.execute(
+                "SELECT statut FROM jobs_planning WHERE of_number=? AND operation_code=?",
+                (of_number, operation_code)
+            ).fetchone()
+
+            if not existe:
+                c.execute(
+                    """INSERT INTO jobs_planning
+                           (of_number, operation_code, item_code, item_desc,
+                            statut, qty, date_besoin, date_import)
+                       VALUES (?,?,?,?,'RELEASED',?,?,?)""",
+                    (of_number, operation_code, item_code, item_desc, qty, date_besoin, now)
+                )
+                nb_new += 1
+            elif existe[0] == "RELEASED":
+                c.execute(
+                    """UPDATE jobs_planning
+                       SET item_desc=?, qty=?, date_besoin=?
+                       WHERE of_number=? AND operation_code=? AND statut='RELEASED'""",
+                    (item_desc, qty, date_besoin, of_number, operation_code)
+                )
+
+        conn_sql.commit()
+        conn_sql.close()
+        if nb_new > 0:
+            print(f"  [Sync Oracle] {nb_new} nouveaux jobs — total Oracle: {len(rows)}")
+
+    except Exception as e:
+        print(f"  [Sync Oracle] Erreur : {e}")
+
+
+# ─── CHERCHER JOBS RELEASED (3 niveaux) ──────────────────────────────────────
+
+def chercher_jobs_released(c, operation_code, nb_ofs, deja_assignes):
+    """
+    3 niveaux de recherche :
+      1. jobs_planning local       → rapide (10ms)
+      2. Oracle direct fallback    → si absent localement
+      3. Si Oracle indispo         → retourne [] + source='indisponible'
+    """
+    exclusions_sql = ""
+    if deja_assignes:
+        placeholders = ",".join(["?" for _ in deja_assignes])
+        exclusions_sql = f"AND of_number NOT IN ({placeholders})"
+
+    # ── NIVEAU 1 : jobs_planning local ───────────────────────────────────────
+    query = f"""
+        SELECT TOP(?) of_number, item_code, item_desc, qty, date_besoin
+        FROM jobs_planning
+        WHERE operation_code=? AND statut='RELEASED'
+        {exclusions_sql}
+        ORDER BY date_besoin ASC, of_number ASC
+    """
+    params = [nb_ofs + 10, operation_code] + deja_assignes
+    jobs_local = c.execute(query, params).fetchall()
+
+    if jobs_local:
+        print(f"  [Jobs] {len(jobs_local)} trouvé(s) localement pour {operation_code}")
+        return [{
+            "of_number"     : j[0],
+            "item_code"     : j[1],
+            "item_desc"     : j[2] or "",
+            "qty"           : j[3] or 1,
+            "date_besoin"   : str(j[4]) if j[4] else None,
+            "operation_code": operation_code,
+        } for j in jobs_local], "local"
+
+    # ── NIVEAU 2 : Oracle direct fallback ────────────────────────────────────
+    print(f"  [Jobs] Rien localement pour {operation_code} → Oracle direct...")
+    jobs_oracle = jobs_released_oracle(operation_code, nb_ofs + 10, deja_assignes)
+
+    if jobs_oracle:
+        print(f"  [Jobs] {len(jobs_oracle)} trouvé(s) dans Oracle pour {operation_code}")
+        # Sauvegarder dans jobs_planning pour les prochains scans
+        now = datetime.now()
+        for j in jobs_oracle:
+            existe = c.execute(
+                "SELECT statut FROM jobs_planning WHERE of_number=? AND operation_code=?",
+                (j["of_number"], j["operation_code"])
+            ).fetchone()
+            if not existe:
+                c.execute(
+                    """INSERT INTO jobs_planning
+                           (of_number, operation_code, item_code, item_desc,
+                            statut, qty, date_besoin, date_import)
+                       VALUES (?,?,?,?,'RELEASED',?,?,?)""",
+                    (j["of_number"], j["operation_code"], j["item_code"],
+                     j["item_desc"], j["qty"], j["date_besoin"], now)
+                )
+        return jobs_oracle, "oracle_direct"
+
+    # ── NIVEAU 3 : rien trouvé nulle part ────────────────────────────────────
+    print(f"  [Jobs] Aucun job disponible pour {operation_code}")
+    return [], "indisponible"
+
+
+# ─── HELPERS JOBS ────────────────────────────────────────────────────────────
+
+def _inserer_job_mission(c, mission_id, job):
+    """Insère un job dans cart_mission_jobs et le marque ASSIGNE dans jobs_planning."""
+    c.execute(
+        "INSERT INTO cart_mission_jobs (mission_id, of_number, item_code, item_desc, statut) VALUES (?,?,?,?,'EN_ATTENTE')",
+        (mission_id, job["of_number"], job["item_code"], job["item_desc"])
+    )
+    _upsert_job_planning(c, job, statut="ASSIGNE")
+
+
+def _upsert_job_planning(c, job, statut="RELEASED"):
+    """Insère ou met à jour un job dans jobs_planning (cache local Oracle)."""
+    existe = c.execute(
+        "SELECT statut FROM jobs_planning WHERE of_number=? AND operation_code=?",
+        (job["of_number"], job["operation_code"])
+    ).fetchone()
+    if not existe:
+        c.execute(
+            """INSERT INTO jobs_planning (of_number, operation_code, item_code, item_desc, statut, qty, date_besoin)
+               VALUES (?,?,?,?,?,?,?)""",
+            (job["of_number"], job["operation_code"], job["item_code"],
+             job["item_desc"], statut, job["qty"], job["date_besoin"])
+        )
+    elif existe[0] == "RELEASED" and statut != "RELEASED":
+        c.execute(
+            "UPDATE jobs_planning SET statut=? WHERE of_number=? AND operation_code=?",
+            (statut, job["of_number"], job["operation_code"])
+        )
+
+
+# ─── API SYNC ORACLE MANUELLE ────────────────────────────────────────────────
+
+@app.route("/api/sync-oracle", methods=["POST"])
+def sync_oracle_manuel():
+    """Déclenche une sync Oracle manuelle (bouton dashboard ou cron)."""
+    try:
+        conn = get_db()
+        c    = conn.cursor()
+        now  = datetime.now()
+        nb   = 0
+
+        conn_ora = get_oracle()
+        if not conn_ora:
+            conn.close()
+            return jsonify({"status": "erreur", "message": "Oracle non accessible"}), 503
+
+        sql = f"""
+            SELECT wen.WIP_ENTITY_NAME, ite.SEGMENT1,
+                   SUBSTR(ite.DESCRIPTION,1,150),
+                   'OP' || wop.OPERATION_SEQ_NUM,
+                   wdj.START_QUANTITY, wdj.SCHEDULED_COMPLETION_DATE
+            FROM   apps.WIP_DISCRETE_JOBS   wdj,
+                   apps.WIP_ENTITIES        wen,
+                   apps.MTL_SYSTEM_ITEMS_B  ite,
+                   apps.WIP_OPERATIONS      wop
+            WHERE  wdj.WIP_ENTITY_ID   = wen.WIP_ENTITY_ID
+              AND  wdj.PRIMARY_ITEM_ID = ite.INVENTORY_ITEM_ID
+              AND  wdj.ORGANIZATION_ID = ite.ORGANIZATION_ID
+              AND  wdj.WIP_ENTITY_ID   = wop.WIP_ENTITY_ID
+              AND  wdj.STATUS_TYPE     = 3
+              AND  wdj.ORGANIZATION_ID = '{ORGANIZATION_ID}'
+              AND  NVL(wop.QUANTITY_COMPLETED,0) < wdj.START_QUANTITY
+            ORDER BY wdj.SCHEDULED_COMPLETION_DATE ASC
+        """
+        rows = conn_ora.cursor().execute(sql).fetchall()
+        conn_ora.close()
+
+        for r in rows:
+            job = {
+                "of_number"     : str(r[0]),
+                "item_code"     : str(r[1]),
+                "item_desc"     : str(r[2] or "")[:150],
+                "operation_code": str(r[3]),
+                "qty"           : int(r[4]) if r[4] else 1,
+                "date_besoin"   : str(r[5].date()) if r[5] else None,
+            }
+            existe = c.execute(
+                "SELECT statut FROM jobs_planning WHERE of_number=? AND operation_code=?",
+                (job["of_number"], job["operation_code"])
+            ).fetchone()
+            if not existe:
+                c.execute(
+                    "INSERT INTO jobs_planning (of_number, operation_code, item_code, item_desc, statut, qty, date_besoin, date_import) VALUES (?,?,?,?,'RELEASED',?,?,?)",
+                    (job["of_number"], job["operation_code"], job["item_code"],
+                     job["item_desc"], job["qty"], job["date_besoin"], now)
+                )
+                nb += 1
+            elif existe[0] == "RELEASED":
+                c.execute(
+                    "UPDATE jobs_planning SET item_desc=?, qty=?, date_besoin=? WHERE of_number=? AND operation_code=? AND statut='RELEASED'",
+                    (job["item_desc"], job["qty"], job["date_besoin"], job["of_number"], job["operation_code"])
+                )
+
+        conn.commit()
+        conn.close()
+        print(f"  Sync Oracle : {len(rows)} rows, {nb} nouveaux")
+        return jsonify({"status": "ok", "total_oracle": len(rows), "nouveaux": nb, "ts": str(now)})
+
+    except Exception as e:
+        return jsonify({"status": "erreur", "message": str(e)}), 500
+
+
 # ─── SCAN 1 : SORTIE SUPERMARCHÉ ─────────────────────────────────────────────
 #   badge START → chariot part vers la ligne  → créer mission
 #   badge END   → chariot revient au SMK       → clore mission (= Scan 3)
@@ -173,7 +533,14 @@ def traiter_scan_supermarche(c, uid, chariot_id, badge_type, nom, station,
 
 def creer_mission(c, uid, chariot_id, nom, station, operation_code,
                   nb_ofs, type_chariot, scanner_id, now):
-    """Crée une nouvelle mission : chariot quitte le supermarché."""
+    """
+    Crée une nouvelle mission quand le chariot quitte le supermarché.
+
+    Logique d'assignation des jobs :
+      0 job  RELEASED → mission sans OF  → WS assigne manuellement
+      1 job  RELEASED → auto-assigné     → WS confirme juste
+      2+ jobs RELEASED → WS choisit dans la liste
+    """
 
     # Déjà une mission active ?
     mission_active = get_mission_active(c, chariot_id)
@@ -187,14 +554,16 @@ def creer_mission(c, uid, chariot_id, nom, station, operation_code,
             "message"    : f"Chariot {chariot_id} a déjà une mission active (statut={statut})",
         }
 
-    # Récupérer les N premiers jobs Released pour cette opération
-    jobs = c.execute(
-        """SELECT TOP(?) of_number, item_code, item_desc, qty, date_besoin
-           FROM jobs_planning
-           WHERE operation_code = ? AND statut = 'RELEASED'
-           ORDER BY date_besoin ASC, of_number ASC""",
-        (nb_ofs, operation_code)
-    ).fetchall()
+    # OFs déjà assignés (à exclure)
+    deja_assignes = [r[0] for r in c.execute(
+        "SELECT of_number FROM jobs_planning WHERE operation_code=? AND statut IN ('ASSIGNE','EN_ATTENTE','EN_COURS')",
+        (operation_code,)
+    ).fetchall()]
+
+    # ── Chercher jobs Released (local → Oracle → indisponible) ───────────────
+    jobs_oracle, source = chercher_jobs_released(c, operation_code, nb_ofs, deja_assignes)
+    nb_disponibles = len(jobs_oracle)
+    print(f"  → {nb_disponibles} job(s) disponible(s) [source={source}]")
 
     # Créer la mission
     c.execute(
@@ -205,41 +574,56 @@ def creer_mission(c, uid, chariot_id, nom, station, operation_code,
     )
     mission_id = int(c.execute("SELECT @@IDENTITY").fetchone()[0])
 
-    # Associer les jobs
-    jobs_info = []
-    for of_number, item_code, item_desc, qty, date_besoin in jobs:
-        c.execute(
-            """INSERT INTO cart_mission_jobs (mission_id, of_number, item_code, item_desc, statut)
-               VALUES (?,?,?,?,'EN_ATTENTE')""",
-            (mission_id, of_number, item_code, item_desc)
-        )
-        c.execute(
-            "UPDATE jobs_planning SET statut='ASSIGNE' WHERE of_number=? AND statut='RELEASED'",
-            (of_number,)
-        )
-        jobs_info.append({
-            "of_number" : of_number,
-            "item_code" : item_code,
-            "item_desc" : item_desc,
-            "qty"       : qty,
-            "date_besoin": str(date_besoin) if date_besoin else None,
-        })
+    jobs_info        = []
+    mode_assignation = None
 
-    log_event(c, mission_id, uid, chariot_id,
-              jobs[0][0] if jobs else None,
-              operation_code, None, "SCAN_1_SUPERMARCHE", None, scanner_id,
-              {"chariot": nom, "jobs_assignes": len(jobs_info)})
+    if nb_disponibles == 0:
+        # ── CAS 0 : aucun job dans Oracle → WS assigne manuellement ──────────
+        mode_assignation = "MANUEL"
+        log_event(c, mission_id, uid, chariot_id, None,
+                  operation_code, None, "SCAN_1_SUPERMARCHE", None, scanner_id,
+                  {"chariot": nom, "mode": "SANS_JOB"})
+
+    elif nb_disponibles == 1:
+        # ── CAS 1 : 1 seul job Oracle → auto-assigné ─────────────────────────
+        mode_assignation = "AUTO"
+        job = jobs_oracle[0]
+        _inserer_job_mission(c, mission_id, job)
+        jobs_info.append(job)
+        log_event(c, mission_id, uid, chariot_id, job["of_number"],
+                  operation_code, None, "SCAN_1_SUPERMARCHE", None, scanner_id,
+                  {"chariot": nom, "mode": "AUTO", "of": job["of_number"]})
+
+    else:
+        # ── CAS 2+ : plusieurs jobs Oracle → WS choisit ──────────────────────
+        mode_assignation = "CHOIX_WS"
+        # Mettre en cache les jobs Oracle dans jobs_planning pour que le WS les voie
+        for job in jobs_oracle:
+            _upsert_job_planning(c, job)
+        log_event(c, mission_id, uid, chariot_id, None,
+                  operation_code, None, "SCAN_1_SUPERMARCHE", None, scanner_id,
+                  {"chariot": nom, "mode": "CHOIX_WS", "nb_jobs": nb_disponibles})
+
+    # ── Message et action selon le mode ──────────────────────────────────────
+    actions = {
+        "AUTO"    : ("MISSION_AUTO",   f"1 job auto-assigné — WS confirme"),
+        "CHOIX_WS": ("MISSION_CHOIX",  f"{nb_disponibles} jobs disponibles — WS choisit"),
+        "MANUEL"  : ("MISSION_VIDE",   "Aucun job disponible — WS assigne manuellement"),
+    }
+    action, message = actions[mode_assignation]
 
     return {
-        "status"         : "ok",
-        "action"         : "MISSION_CREEE",
-        "mission_id"     : mission_id,
-        "chariot_id"     : chariot_id,
-        "chariot_nom"    : nom,
-        "operation_code" : operation_code,
-        "statut"         : "EN_APPROCHE",
-        "jobs"           : jobs_info,
-        "message"        : f"Mission créée — {len(jobs_info)} job(s) pré-assigné(s)",
+        "status"          : "ok",
+        "action"          : action,
+        "mode_assignation": mode_assignation,
+        "mission_id"      : mission_id,
+        "chariot_id"      : chariot_id,
+        "chariot_nom"     : nom,
+        "operation_code"  : operation_code,
+        "statut"          : "EN_APPROCHE",
+        "jobs"            : jobs_info,
+        "nb_jobs_dispo"   : nb_disponibles,
+        "message"         : message,
     }
 
 
@@ -343,6 +727,121 @@ def traiter_scan_retour(c, uid, chariot_id, badge_type, scanner_id, now):
 
 
 # ─── API TABLETTES WS ─────────────────────────────────────────────────────────
+
+@app.route("/api/ws/jobs-disponibles", methods=["GET"])
+def ws_jobs_disponibles():
+    """
+    Retourne les jobs RELEASED pour une opération donnée.
+    Utilisé par le WS quand il y a plusieurs jobs à choisir.
+    Param : ?operation_code=OP10
+    """
+    operation_code = request.args.get("operation_code")
+    if not operation_code:
+        return jsonify({"status": "erreur", "message": "operation_code requis"}), 400
+    try:
+        conn = get_db()
+        c    = conn.cursor()
+        jobs = c.execute(
+            """SELECT of_number, item_code, item_desc, qty, date_besoin
+               FROM jobs_planning
+               WHERE operation_code=? AND statut='RELEASED'
+               ORDER BY date_besoin ASC, of_number ASC""",
+            (operation_code,)
+        ).fetchall()
+        conn.close()
+        return jsonify({
+            "status"         : "ok",
+            "operation_code" : operation_code,
+            "jobs"           : [{
+                "of_number"  : j[0],
+                "item_code"  : j[1],
+                "item_desc"  : j[2],
+                "qty"        : j[3],
+                "date_besoin": str(j[4]) if j[4] else None,
+            } for j in jobs],
+            "count" : len(jobs),
+        })
+    except Exception as e:
+        return jsonify({"status": "erreur", "message": str(e)}), 500
+
+
+@app.route("/api/ws/assigner-job", methods=["POST"])
+def ws_assigner_job():
+    """
+    WS assigne manuellement un OF à une mission (cas 0 ou 2+ jobs).
+    Body JSON : { mission_id, of_number, ws_id }
+    """
+    data       = request.json or {}
+    mission_id = data.get("mission_id")
+    of_number  = data.get("of_number")
+    ws_id      = data.get("ws_id")
+
+    if not all([mission_id, of_number]):
+        return jsonify({"status": "erreur", "message": "mission_id et of_number requis"}), 400
+
+    try:
+        conn = get_db()
+        c    = conn.cursor()
+
+        # Vérifier que la mission existe et est EN_APPROCHE
+        mission = c.execute(
+            "SELECT id, statut, chariot_id, operation_code FROM cart_missions WHERE id=?",
+            (mission_id,)
+        ).fetchone()
+
+        if not mission or mission[1] != "EN_APPROCHE":
+            conn.close()
+            return jsonify({
+                "status" : "erreur",
+                "message": f"Mission non en approche (statut={mission[1] if mission else 'introuvable'})",
+            }), 400
+
+        _, _, chariot_id, operation_code = mission
+
+        # Vérifier que le job est bien RELEASED
+        job = c.execute(
+            "SELECT of_number, item_code, item_desc, qty FROM jobs_planning WHERE of_number=? AND operation_code=? AND statut='RELEASED'",
+            (of_number, operation_code)
+        ).fetchone()
+
+        if not job:
+            conn.close()
+            return jsonify({
+                "status" : "erreur",
+                "message": f"OF {of_number} non disponible (déjà assigné ou introuvable)",
+            }), 400
+
+        of_number, item_code, item_desc, qty = job
+
+        # Insérer dans cart_mission_jobs
+        c.execute(
+            "INSERT INTO cart_mission_jobs (mission_id, of_number, item_code, item_desc, statut) VALUES (?,?,?,?,'EN_ATTENTE')",
+            (mission_id, of_number, item_code, item_desc)
+        )
+
+        # Marquer le job comme assigné
+        c.execute(
+            "UPDATE jobs_planning SET statut='ASSIGNE' WHERE of_number=? AND operation_code=? AND statut='RELEASED'",
+            (of_number, operation_code)
+        )
+
+        log_event(c, mission_id, None, chariot_id, of_number,
+                  operation_code, None, "JOB_SELECTIONNE", ws_id, None,
+                  {"of_number": of_number, "mode": "WS_MANUEL"})
+
+        conn.commit()
+        conn.close()
+        return jsonify({
+            "status"     : "ok",
+            "action"     : "JOB_ASSIGNE",
+            "mission_id" : mission_id,
+            "of_number"  : of_number,
+            "item_code"  : item_code,
+            "message"    : f"OF {of_number} assigné au chariot",
+        })
+    except Exception as e:
+        return jsonify({"status": "erreur", "message": str(e)}), 500
+
 
 @app.route("/api/ws/missions-en-attente", methods=["GET"])
 def ws_missions_en_attente():
@@ -823,4 +1322,13 @@ if __name__ == "__main__":
     print("    GET   /api/historique")
     print("    GET   /api/test")
     print("=" * 55 + "\n")
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    # ── Sync Oracle automatique toutes les 30 secondes ───────────────────────
+    if SCHEDULER_OK and ORACLE_OK:
+        scheduler = BackgroundScheduler()
+        scheduler.add_job(sync_oracle_background, 'interval', seconds=30)
+        scheduler.start()
+        print("  [Sync Oracle] Actif — toutes les 30 secondes")
+    else:
+        print("  [Sync Oracle] Désactivé (APScheduler ou oracledb manquant)")
+
+    app.run(host="0.0.0.0", port=5000, debug=True, threaded=True)
