@@ -23,6 +23,10 @@ from datetime import datetime
 import pyodbc
 import json
 import threading
+from dotenv import load_dotenv
+
+# Charger les variables depuis .env
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 # APScheduler pour sync automatique
 try:
@@ -53,16 +57,16 @@ def page_dashboard():
     return send_from_directory(FRONTEND_DIR, 'dashboard.html')
 
 # ─── CONNEXION SQL SERVER ──────────────────────────────────────────────────────
-SERVER  = r"localhost\SQLEXPRESS"
-DB_NAME = "rfid_pristina"
+SERVER  = os.getenv("SQL_SERVER", r"localhost\SQLEXPRESS")
+DB_NAME = os.getenv("SQL_DB", "rfid_pristina")
 
 # ─── CONNEXION ORACLE ──────────────────────────────────────────────────────────
-ORACLE_USER     = "TON_USERNAME"       # ← ton username
-ORACLE_PASSWORD = "TON_PASSWORD"       # ← ton mot de passe
-ORACLE_HOST     = "qahceaexa-scan.ge-healthcare.net"
-ORACLE_PORT     = 1521
-ORACLE_SERVICE  = "ebs_gltest"
-ORGANIZATION_ID = "1731"
+ORACLE_USER     = os.getenv("ORACLE_USER")
+ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD")
+ORACLE_HOST     = os.getenv("ORACLE_HOST", "qahceaexa-scan.ge-healthcare.net")
+ORACLE_PORT     = int(os.getenv("ORACLE_PORT", "1521"))
+ORACLE_SERVICE  = os.getenv("ORACLE_SERVICE", "ebs_gltest")
+ORGANIZATION_ID = os.getenv("ORGANIZATION_ID", "1731")
 
 def get_oracle():
     """Connexion Oracle directe — temps réel."""
