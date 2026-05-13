@@ -6,11 +6,15 @@ Connexion Oracle :
   Host    : qahceaexa-scan.ge-healthcare.net
   Port    : 1521
   Service : ebs_gltest
-  Org     : BXD (ORGANIZATION_ID = 1731)
+  Org     : BXD 
 """
 
 import sys
+import os
 from datetime import datetime
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 # ─── DÉPENDANCES ──────────────────────────────────────────────────────────────
 try:
@@ -29,11 +33,11 @@ except ImportError:
 
 
 # ─── CONFIGURATION ORACLE ─────────────────────────────────────────────────────
-ORACLE_USER     = "TON_USERNAME"      # ← remplace par ton username SSO/Oracle
-ORACLE_PASSWORD = "TON_PASSWORD"      # ← remplace par ton mot de passe
-ORACLE_HOST     = "qahceaexa-scan.ge-healthcare.net"
-ORACLE_PORT     = 1521
-ORACLE_SERVICE  = "ebs_gltest"
+ORACLE_USER     = os.getenv("ORACLE_USER")
+ORACLE_PASSWORD = os.getenv("ORACLE_PASSWORD")
+ORACLE_HOST     = os.getenv("ORACLE_HOST", "qahceaexa-scan.ge-healthcare.net")
+ORACLE_PORT     = int(os.getenv("ORACLE_PORT", "1521"))
+ORACLE_SERVICE  = os.getenv("ORACLE_SERVICE", "ebs_gltest")
 
 ORACLE_DSN = oracledb.makedsn(
     host    = ORACLE_HOST,

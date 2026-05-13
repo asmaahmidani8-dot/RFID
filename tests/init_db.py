@@ -29,7 +29,7 @@ def creer_tables(conn):
             actif           INTEGER DEFAULT 1
         )
     """)
-    print("  ✓ chariots")
+    print("chariots")
 
     # ─── TABLE 2 : rfid_cards ─────────────────────────────────────────────────
     c.execute("""
@@ -57,7 +57,7 @@ def creer_tables(conn):
             last_seen       TEXT
         )
     """)
-    print("  ✓ rfid_scanners")
+    print("  rfid_scanners")
 
     # ─── TABLE 4 : jobs_planning ──────────────────────────────────────────────
     c.execute("""
@@ -105,7 +105,7 @@ def creer_tables(conn):
             FOREIGN KEY (chariot_id) REFERENCES chariots(chariot_id)
         )
     """)
-    print("  ✓ cart_missions")
+    print("  cart_missions")
 
     # ─── TABLE 6 : cart_mission_jobs ──────────────────────────────────────────
     c.execute("""
@@ -120,7 +120,7 @@ def creer_tables(conn):
             UNIQUE (mission_id, of_number)
         )
     """)
-    print("  ✓ cart_mission_jobs")
+    print("  cart_mission_jobs")
 
     # ─── TABLE 7 : cart_events ────────────────────────────────────────────────
     c.execute("""
@@ -139,7 +139,7 @@ def creer_tables(conn):
             details         TEXT
         )
     """)
-    print("  ✓ cart_events")
+    print("  cart_events")
 
     # ─── TABLE 8 : chariot_groupes ────────────────────────────────────────────
     c.execute("""
@@ -153,7 +153,7 @@ def creer_tables(conn):
             FOREIGN KEY (chariot_id) REFERENCES chariots(chariot_id)
         )
     """)
-    print("  ✓ chariot_groupes")
+    print("  chariot_groupes")
 
     # ─── TABLE 9 : chariot_groupe_ofs ─────────────────────────────────────────
     c.execute("""
@@ -167,7 +167,7 @@ def creer_tables(conn):
             UNIQUE (groupe_id, of_number)
         )
     """)
-    print("  ✓ chariot_groupe_ofs")
+    print("  chariot_groupe_ofs")
 
     conn.commit()
     print("\nToutes les tables creees ✓")
