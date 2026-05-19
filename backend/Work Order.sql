@@ -78,3 +78,17 @@ Service name
 	
 ebs_gltest
 pip install flask pyodbc oracledb apscheduler python-dotenv
+
+-- Voir les colonnes de LIGNE
+SELECT COLUMN_NAME, DATA_TYPE 
+FROM INFORMATION_SCHEMA.COLUMNS 
+WHERE TABLE_NAME = 'LIGNE';
+
+-- Voir les colonnes de ASSEMBL_desc
+SELECT COLUMN_NAME, DATA_TYPE 
+FROM INFORMATION_SCHEMA.COLUMNS 
+WHERE TABLE_NAME = 'ASSEMBL_desc';
+
+-- Voir quelques données de chaque table
+SELECT TOP 5 * FROM dbo.LIGNE;
+SELECT TOP 5 * FROM dbo.ASSEMBL_desc;
