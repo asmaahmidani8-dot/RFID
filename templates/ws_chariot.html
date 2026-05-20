@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ chariot.nom }} — Jobs disponibles</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #F0F4F8; font-family: 'Segoe UI', sans-serif; }
+
+    .top-bar {
+      background: #1C3D6E;
+      color: white;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .top-bar .title { font-size: 1.1rem; font-weight: 700; }
+    .top-bar .subtitle { font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
+
+    /* Info chariot */
+    .chariot-header {
+      background: white;
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin: 20px 0 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .chariot-icon {
+      width: 56px; height: 56px;
+      background: #EEF2F7;
+      border-radius: 14px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.8rem; color: #1C3D6E;
+      flex-shrink: 0;
+    }
+    .chariot-info .name { font-size: 1.2rem; font-weight: 700; color: #1C3D6E; }
+    .chariot-info .id   { font-size: 0.8rem; color: #94A3B8; font-family: monospace; }
+    .badge-info {
+      font-size: 0.78rem; font-weight: 700;
+      padding: 5px 14px; border-radius: 20px;
+    }
+    .badge-loc { background: #EEF2F7; color: #1C3D6E; }
+    .badge-op  { background: #E8F5E9; color: #2E7D32; }
+
+    /* Tableau des jobs */
+    .jobs-table-wrap {
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+    .jobs-table-wrap table { margin: 0; }
+    .jobs-table-wrap thead th {
+      background: #F8FAFC;
+      color: #64748B;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-bottom: 1px solid #E2E8F0;
+      padding: 12px 16px;
+    }
+    .jobs-table-wrap tbody td {
+      padding: 14px 16px;
+      vertical-align: middle;
+      border-color: #F1F5F9;
+    }
+    .jobs-table-wrap tbody tr:hover { background: #F8FAFC; }
+
+    .of-number {
+      font-family: monospace;
+      font-weight: 700;
+      color: #1C3D6E;
+      font-size: 0.95rem;
+    }
+    .item-code {
+      font-family: monospace;
+      font-size: 0.85rem;
+      color: #475569;
+    }
+    .item-desc {
+      font-size: 0.88rem;
+      color: #374151;
+      max-width: 280px;
+    }
+    .badge-gamme {
+      background: #F0F4FF;
+      color: #3730A3;
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 12px;
+      white-space: nowrap;
+    }
+
+    /* Checkbox custom */
+    .form-check-input:checked {
+      background-color: #1C3D6E;
+      border-color: #1C3D6E;
+    }
+    .row-selected { background: #EEF2F7 !important; }
+
+    /* Barre du bas */
+    .bottom-bar {
+      position: sticky;
+      bottom: 0;
+      background: white;
+      border-top: 2px solid #E2E8F0;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      z-index: 100;
+      box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+    }
+    .selected-count {
+      font-size: 0.9rem;
+      color: #64748B;
+    }
+    .selected-count strong { color: #1C3D6E; font-size: 1.1rem; }
+    .btn-valider {
+      background: #1C3D6E;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 28px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      transition: all 0.2s;
+    }
+    .btn-valider:hover:not(:disabled) {
+      background: #14305A;
+      transform: translateY(-1px);
+    }
+    .btn-valider:disabled {
+      background: #CBD5E1;
+      cursor: not-allowed;
+    }
+
+    .empty-state {
+      text-align: center; padding: 64px 24px; color: #94A3B8;
+    }
+    .empty-state i { font-size: 3rem; margin-bottom: 12px; display: block; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ BARRE SUPERIEURE ═══ -->
+<div class="top-bar">
+  <div>
+    <div class="title">
+      <a href="/" style="color:white; text-decoration:none; margin-right:10px;">
+        <i class="bi bi-arrow-left"></i>
+      </a>
+      Sélection des OFs à charger
+    </div>
+    <div class="subtitle">Water Spider — GE HealthCare Buc</div>
+  </div>
+  <div style="font-size:0.85rem; opacity:0.8;" id="clock">--:--:--</div>
+</div>
+
+<div class="container-fluid px-4" style="max-width:1100px; padding-bottom:100px;">
+
+  <!-- Info chariot -->
+  <div class="chariot-header">
+    <div class="chariot-icon"><i class="bi bi-cart4"></i></div>
+    <div class="chariot-info">
+      <div class="name">{{ chariot.nom }}</div>
+      <div class="id">{{ chariot.chariot_id }}</div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap ms-auto">
+      <span class="badge-info badge-loc">
+        <i class="bi bi-geo-alt-fill me-1"></i>{{ chariot.location }}
+      </span>
+      <span class="badge-info badge-op">
+        <i class="bi bi-gear-fill me-1"></i>{{ chariot.operation_code }}
+      </span>
+    </div>
+  </div>
+
+  <!-- Titre section -->
+  <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase;
+              letter-spacing:1.2px; color:#64748B; margin:20px 0 10px;">
+    <i class="bi bi-list-check me-1"></i>
+    OFs disponibles ({{ jobs|length }} OF{{ 's' if jobs|length > 1 else '' }})
+  </div>
+
+  <!-- Formulaire -->
+  <form action="/mission/creer" method="POST" id="missionForm">
+    <input type="hidden" name="chariot_id" value="{{ chariot.chariot_id }}">
+
+    {% if jobs %}
+
+    <!-- Bouton tout sélectionner -->
+    <div class="d-flex justify-content-end mb-2">
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="toggleAll()">
+        <i class="bi bi-check2-all me-1"></i>Tout sélectionner
+      </button>
+    </div>
+
+    <div class="jobs-table-wrap">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th style="width:44px;"></th>
+            <th>OF</th>
+            <th>Item Code</th>
+            <th>Description</th>
+            <th>Gamme</th>
+            <th class="text-center">Qté</th>
+            <th>Date besoin</th>
+          </tr>
+        </thead>
+        <tbody id="jobsBody">
+          {% for job in jobs %}
+          <tr id="row-{{ loop.index }}" onclick="toggleRow({{ loop.index }})" style="cursor:pointer;">
+            <td>
+              <input class="form-check-input job-check" type="checkbox"
+                     name="of_numbers" value="{{ job.of_number }}"
+                     id="chk-{{ loop.index }}"
+                     onclick="event.stopPropagation(); updateCount();">
+            </td>
+            <td><span class="of-number">{{ job.of_number }}</span></td>
+            <td><span class="item-code">{{ job.item_code }}</span></td>
+            <td>
+              <span class="item-desc">{{ job.item_desc }}</span>
+            </td>
+            <td><span class="badge-gamme">{{ job.gamme }}</span></td>
+            <td class="text-center">
+              <strong>{{ job.qty | int if job.qty else '—' }}</strong>
+            </td>
+            <td style="font-size:0.85rem; color:#475569; white-space:nowrap;">
+              {% if job.date_besoin %}
+                {{ job.date_besoin.strftime('%d/%m/%Y') }}
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    {% else %}
+    <div class="empty-state">
+      <i class="bi bi-inbox"></i>
+      Aucun OF disponible pour ce chariot.<br>
+      <small>Tous les OFs sont déjà en cours de mission ou aucun n'est RELEASED.</small>
+    </div>
+    {% endif %}
+
+  </form>
+</div>
+
+<!-- ═══ BARRE INFERIEURE ═══ -->
+{% if jobs %}
+<div class="bottom-bar">
+  <div class="selected-count">
+    <strong id="count">0</strong> OF(s) sélectionné(s)
+  </div>
+  <div class="d-flex gap-2">
+    <a href="/" class="btn btn-outline-secondary" style="border-radius:10px; padding:10px 20px;">
+      <i class="bi bi-x-lg me-1"></i>Annuler
+    </a>
+    <button type="submit" form="missionForm" class="btn-valider" id="btnValider" disabled>
+      <i class="bi bi-check-circle me-2"></i>Créer la mission
+    </button>
+  </div>
+</div>
+{% endif %}
+
+<script>
+  // Horloge
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+  updateClock(); setInterval(updateClock, 1000);
+
+  // Clic sur une ligne → coche/décoche
+  function toggleRow(idx) {
+    const chk = document.getElementById('chk-' + idx);
+    chk.checked = !chk.checked;
+    highlightRow(idx, chk.checked);
+    updateCount();
+  }
+
+  function highlightRow(idx, checked) {
+    const row = document.getElementById('row-' + idx);
+    if (checked) row.classList.add('row-selected');
+    else         row.classList.remove('row-selected');
+  }
+
+  // Tout sélectionner / désélectionner
+  let allSelected = false;
+  function toggleAll() {
+    allSelected = !allSelected;
+    document.querySelectorAll('.job-check').forEach((chk, i) => {
+      chk.checked = allSelected;
+      highlightRow(i + 1, allSelected);
+    });
+    updateCount();
+  }
+
+  // Compteur OFs sélectionnés
+  function updateCount() {
+    const n = document.querySelectorAll('.job-check:checked').length;
+    document.getElementById('count').textContent = n;
+    document.getElementById('btnValider').disabled = (n === 0);
+  }
+</script>
+</body>
+</html>

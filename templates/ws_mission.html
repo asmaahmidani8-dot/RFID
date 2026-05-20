@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission #{{ mission.id }} — Confirmée</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    body { background: #F0F4F8; font-family: 'Segoe UI', sans-serif; }
+
+    .top-bar {
+      background: #1C3D6E; color: white;
+      padding: 14px 24px;
+      display: flex; align-items: center; justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .top-bar .title { font-size: 1.1rem; font-weight: 700; }
+    .top-bar .subtitle { font-size: 0.78rem; opacity: 0.75; margin-top: 2px; }
+
+    .confirm-banner {
+      background: linear-gradient(135deg, #16A34A, #15803D);
+      color: white;
+      border-radius: 16px;
+      padding: 28px 32px;
+      margin: 24px 0 20px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      box-shadow: 0 4px 20px rgba(22,163,74,0.3);
+    }
+    .confirm-banner .icon {
+      font-size: 2.5rem;
+      flex-shrink: 0;
+    }
+    .confirm-banner .mission-num {
+      font-size: 0.8rem;
+      opacity: 0.85;
+      font-family: monospace;
+    }
+    .confirm-banner .mission-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+    }
+
+    .info-card {
+      background: white;
+      border-radius: 14px;
+      padding: 20px 24px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      margin-bottom: 16px;
+    }
+    .info-card .label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #94A3B8;
+      margin-bottom: 4px;
+    }
+    .info-card .value {
+      font-size: 1rem;
+      font-weight: 700;
+      color: #1C3D6E;
+    }
+
+    .jobs-list {
+      background: white;
+      border-radius: 14px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+      overflow: hidden;
+    }
+    .jobs-list-header {
+      background: #F8FAFC;
+      padding: 12px 20px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #64748B;
+      border-bottom: 1px solid #E2E8F0;
+    }
+    .job-row {
+      padding: 14px 20px;
+      border-bottom: 1px solid #F1F5F9;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .job-row:last-child { border-bottom: none; }
+    .job-num {
+      width: 28px; height: 28px;
+      background: #EEF2F7;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: #1C3D6E;
+      flex-shrink: 0;
+    }
+    .job-of { font-family: monospace; font-weight: 700; color: #1C3D6E; font-size: 0.9rem; }
+    .job-desc { font-size: 0.85rem; color: #374151; }
+    .job-code { font-size: 0.78rem; color: #94A3B8; font-family: monospace; }
+
+    .instruction-box {
+      background: #FFFBEB;
+      border: 2px solid #FCD34D;
+      border-radius: 14px;
+      padding: 20px 24px;
+      margin-top: 20px;
+    }
+    .instruction-box .step {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+    .instruction-box .step:last-child { margin-bottom: 0; }
+    .step-num {
+      width: 30px; height: 30px;
+      background: #F59E0B;
+      color: white;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+    .step-text { font-size: 0.9rem; color: #374151; padding-top: 4px; }
+    .step-text strong { color: #1C3D6E; }
+
+    .btn-retour {
+      display: block;
+      background: #1C3D6E;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-weight: 700;
+      font-size: 1rem;
+      text-align: center;
+      text-decoration: none;
+      margin: 24px 0;
+      transition: all 0.2s;
+    }
+    .btn-retour:hover { background: #14305A; color: white; }
+  </style>
+</head>
+<body>
+
+<!-- ═══ BARRE SUPERIEURE ═══ -->
+<div class="top-bar">
+  <div>
+    <div class="title"><i class="bi bi-check2-circle me-2"></i>Mission créée</div>
+    <div class="subtitle">Water Spider — GE HealthCare Buc</div>
+  </div>
+  <div style="font-size:0.85rem; opacity:0.8;" id="clock">--:--:--</div>
+</div>
+
+<div class="container-fluid px-4" style="max-width:900px; padding-bottom:40px;">
+
+  <!-- Bannière confirmation -->
+  <div class="confirm-banner">
+    <div class="icon"><i class="bi bi-check-circle-fill"></i></div>
+    <div>
+      <div class="mission-num">MISSION #{{ mission.id }}</div>
+      <div class="mission-title">Mission créée avec succès !</div>
+      <div style="font-size:0.85rem; opacity:0.9; margin-top:4px;">
+        {{ mission.nom }} — {{ mission.location }} — {{ mission.operation_code }}
+      </div>
+    </div>
+  </div>
+
+  <!-- Infos mission -->
+  <div class="row g-3 mb-2">
+    <div class="col-6 col-md-3">
+      <div class="info-card">
+        <div class="label"><i class="bi bi-cart4 me-1"></i>Chariot</div>
+        <div class="value">{{ mission.chariot_id }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="info-card">
+        <div class="label"><i class="bi bi-geo-alt me-1"></i>Emplacement</div>
+        <div class="value">{{ mission.location }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="info-card">
+        <div class="label"><i class="bi bi-gear me-1"></i>Opération</div>
+        <div class="value">{{ mission.operation_code }}</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="info-card">
+        <div class="label"><i class="bi bi-box-seam me-1"></i>Nb OFs</div>
+        <div class="value">{{ jobs|length }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Liste des OFs chargés -->
+  <div style="font-size:0.75rem; font-weight:700; text-transform:uppercase;
+              letter-spacing:1.2px; color:#64748B; margin:20px 0 10px;">
+    <i class="bi bi-list-check me-1"></i>OFs à charger sur le chariot
+  </div>
+
+  <div class="jobs-list">
+    <div class="jobs-list-header">{{ jobs|length }} OF(s) affecté(s)</div>
+    {% for job in jobs %}
+    <div class="job-row">
+      <div class="job-num">{{ loop.index }}</div>
+      <div style="flex:1;">
+        <div class="job-of">{{ job.of_number }}</div>
+        <div class="job-desc">{{ job.item_desc }}</div>
+        <div class="job-code">{{ job.item_code }}</div>
+      </div>
+      <span style="background:#FFF3E0; color:#E65100; font-size:0.72rem;
+                   font-weight:700; padding:3px 10px; border-radius:12px;">
+        EN_ATTENTE
+      </span>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Instructions pour WS -->
+  <div class="instruction-box">
+    <div style="font-weight:700; color:#92400E; margin-bottom:14px;">
+      <i class="bi bi-info-circle-fill me-2"></i>Prochaines étapes
+    </div>
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        Charger les <strong>{{ jobs|length }} OF(s)</strong> sur le chariot <strong>{{ mission.chariot_id }}</strong>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        Passer le badge <strong>START</strong> devant le scanner Pepper C1 à la sortie du supermarché
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        Amener le chariot au <strong>{{ mission.location }} — {{ mission.operation_code }}</strong>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-text">
+        Au retour, passer le badge <strong>END</strong> (chariot vide) à l'entrée du supermarché
+      </div>
+    </div>
+  </div>
+
+  <!-- Retour accueil -->
+  <a href="/" class="btn-retour">
+    <i class="bi bi-house me-2"></i>Retour à l'accueil
+  </a>
+
+</div>
+
+<script>
+  function updateClock() {
+    const now = new Date();
+    document.getElementById('clock').textContent =
+      now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+  }
+  updateClock(); setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
