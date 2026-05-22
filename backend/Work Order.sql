@@ -863,3 +863,30 @@ ORDER BY
     bos.OPERATION_SEQ_NUM ASC
 ;
 HH
+
+SELECT 
+    NOM_LIGNE                           AS gamme,
+    ASSEMBLY                            AS item_code,
+    DESCRIPTION                         AS item_desc,
+    CASE 
+        WHEN DESCRIPTION LIKE '%FEEDER 3%' THEN 3
+        WHEN DESCRIPTION LIKE '%FEEDER 4%' THEN 4
+        WHEN DESCRIPTION LIKE '%FEEDER 5%' THEN 5
+        ELSE NULL
+    END                                 AS feeder_num,
+    CASE 
+        WHEN DESCRIPTION LIKE '%FEEDER%' THEN 'FEEDER'
+        ELSE 'PRINCIPAL'
+    END                                 AS job_type
+
+FROM dbo.LIGNE
+WHERE ORGANIZATION = 'BXD'
+AND NOM_LIGNE IN (
+    -- Seulement les gammes qui ont des items FEEDER = production réelle
+    SELECT DISTINCT NOM_LIGNE 
+    FROM dbo.LIGNE 
+    WHERE DESCRIPTION LIKE '%FEEDER%'
+    AND ORGANIZATION = 'BXD'
+)
+ORDER BY NOM_LIGNE, feeder_num, ASSEMBLY;
+
