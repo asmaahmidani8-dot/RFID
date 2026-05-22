@@ -651,3 +651,215 @@ PRISTINA S30381AB	5717903-2	|FEEDER 5| LIFT SCREW ASSY WITH MOTOR	5	FEEDER
 PRISTINA S30381AB	5718540	|FEEDER 5| LIFT ENCODER ASSEMBLY	5	FEEDER
 PRISTINA S30381AB	5726638	|FEEDER 5| Lift Board Assembly	5	FEEDER
 PRISTINA S30381AB	5726640	|FEEDER 5| Rotation Board Assembly	5	FEEDER
+
+
+
+CCREATE DATABASE IF NOT EXISTS rfid_buc
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE rfid_buc;
+
+-- ══════════════════════════════════════════════════════
+-- 1. CHARIOTS
+-- ══════════════════════════════════════════════════════
+CREATE TABLE chariots (
+    chariot_id     VARCHAR(20)  PRIMARY KEY,
+    nom            VARCHAR(50)  NOT NULL,
+    job_type       VARCHAR(10),                     -- PRINCIPAL / FEEDER
+    nb_ofs         INT          DEFAULT 1,
+    type_chariot   ENUM('A','B','C','D') NOT NULL,
+    operation_code VARCHAR(10),                     -- OP10, OP20... (PRINCIPAL uniquement)
+    poste          VARCHAR(20),                     -- POSTE-1 / FEEDER-3
+    feeder_num     INT          DEFAULT NULL,       -- ✅ AJOUT : 3/4/5 (FEEDER uniquement)
+    partie         VARCHAR(5),                      -- 1/2 ou 2/2 (Type A)
+    groupe_ref     VARCHAR(20),
+    actif          TINYINT(1)   DEFAULT 1,
+    cree_le        DATETIME     DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ══════════════════════════════════════════════════════
+-- 2. RFID_CARDS
+-- ══════════════════════════════════════════════════════
+CREATE TABLE rfid_cards (
+    uid            VARCHAR(50)  PRIMARY KEY,
+    chariot_id     VARCHAR(20)  NOT NULL,
+    badge_type     ENUM('START','END') NOT NULL,
+    actif          TINYINT(1)   DEFAULT 1,
+    cree_le        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (chariot_id) REFERENCES chariots(chariot_id)
+);
+
+-- ══════════════════════════════════════════════════════
+-- 3. RFID_SCANNERS
+-- ══════════════════════════════════════════════════════
+CREATE TABLE rfid_scanners (
+    scanner_id     VARCHAR(20)  PRIMARY KEY,
+    nom            VARCHAR(50),
+    localisation   VARCHAR(50),
+    ip_address     VARCHAR(15),
+    actif          TINYINT(1)   DEFAULT 1,
+    cree_le        DATETIME     DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ══════════════════════════════════════════════════════
+-- 4. PRISTINA_CATALOGUE
+-- ✅ FIX 1 : gamme → gamme_code + gamme_label
+-- ✅ FIX 2 : item_code n'est PAS UNIQUE
+--            (5582884 apparaît dans toutes les gammes !)
+-- ✅ FIX 3 : feeder_num INT au lieu de VARCHAR
+-- ══════════════════════════════════════════════════════
+CREATE TABLE pristina_catalogue (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    gamme_code     VARCHAR(20)  NOT NULL,           -- S30371FL
+    gamme_label    VARCHAR(100),                    -- Senographe Pristina 8.4
+    item_code      VARCHAR(50)  NOT NULL,           -- 5582884 / S30371FL
+    item_desc      VARCHAR(200),
+    feeder_num     INT          DEFAULT NULL,       -- NULL=PRINCIPAL  3/4/5=FEEDER
+    job_type       VARCHAR(10),                     -- PRINCIPAL / FEEDER
+    UNIQUE KEY uq_gamme_item (gamme_code, item_code) -- ✅ couple unique
+);
+
+-- ══════════════════════════════════════════════════════
+-- 5. JOBS_PLANNING
+-- ✅ FIX : of_number seul N'EST PAS une PK !
+--   FL646PTN_Iter8.4 apparaît à OP80, OP90, OP100...
+--   PK = (of_number + operation_code)
+-- ══════════════════════════════════════════════════════
+CREATE TABLE jobs_planning (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    of_number      VARCHAR(50)  NOT NULL,           -- FL646PTN_Iter8.4
+    operation_code VARCHAR(10)  NOT NULL,           -- OP80, OP90...
+    item_code      VARCHAR(50),                     -- S30371FL
+    item_desc      VARCHAR(200),
+    statut         VARCHAR(20)  DEFAULT 'RELEASED',
+    qty_totale     DECIMAL(10,2),
+    qty_faite      DECIMAL(10,2) DEFAULT 0,
+    date_besoin    DATE,
+    sync_le        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_job_op (of_number, operation_code) -- ✅ couple unique
+);
+
+-- ══════════════════════════════════════════════════════
+-- 5b. MISSION_GROUPES
+-- ══════════════════════════════════════════════════════
+CREATE TABLE mission_groupes (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    cree_le        DATETIME     DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ══════════════════════════════════════════════════════
+-- 6. CART_MISSIONS
+-- ✅ AJOUT : gamme_code pour savoir quel appareil Pristina
+-- ══════════════════════════════════════════════════════
+CREATE TABLE cart_missions (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    chariot_id     VARCHAR(20)  NOT NULL,
+    rfid_uid       VARCHAR(50),
+    gamme_code     VARCHAR(20),                     -- ✅ AJOUT : S30371FL
+    statut         ENUM('PREPAREE','EN_ATTENTE',
+                        'EN_APPROCHE','RETOUR',
+                        'TERMINEE')
+                   DEFAULT 'PREPAREE',
+    groupe_id      INT,
+    partie         VARCHAR(5),
+    ts_preparee    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    ts_en_attente  DATETIME,
+    ts_en_approche DATETIME,
+    ts_retour      DATETIME,
+    ts_terminee    DATETIME,
+    actif          TINYINT(1)   DEFAULT 1,
+    FOREIGN KEY (chariot_id) REFERENCES chariots(chariot_id),
+    FOREIGN KEY (groupe_id)  REFERENCES mission_groupes(id)
+);
+
+-- ══════════════════════════════════════════════════════
+-- 7. CART_MISSION_JOBS
+-- ══════════════════════════════════════════════════════
+CREATE TABLE cart_mission_jobs (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    mission_id     INT          NOT NULL,
+    of_number      VARCHAR(50)  NOT NULL,
+    operation_code VARCHAR(10),                     -- ✅ AJOUT : cohérent avec jobs_planning
+    item_code      VARCHAR(50),
+    item_desc      VARCHAR(200),
+    statut         ENUM('ASSIGNE','MOVE_PENDING',
+                        'MOVE_DONE','ANNULE')
+                   DEFAULT 'ASSIGNE',
+    cree_le        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (mission_id) REFERENCES cart_missions(id)
+);
+
+-- ══════════════════════════════════════════════════════
+-- 8. CART_EVENTS
+-- ══════════════════════════════════════════════════════
+CREATE TABLE cart_events (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    mission_id     INT,
+    chariot_id     VARCHAR(20),
+    evenement      VARCHAR(30),                     -- BADGE_START / BADGE_END / SCAN_QR
+    rfid_uid       VARCHAR(50),
+    scanner_id     VARCHAR(20),
+    ts             DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (mission_id)  REFERENCES cart_missions(id),
+    FOREIGN KEY (chariot_id)  REFERENCES chariots(chariot_id),
+    FOREIGN KEY (scanner_id)  REFERENCES rfid_scanners(scanner_id)
+
+);
+-- ══════════════════════════════════════════════════════
+-- 9. ORACLE_MOVE_QUEUE — file d'attente Move Transaction
+--    rfid_mqtt.py écrit ici
+--    oracle_msca_move.py lit ici toutes les 10 secondes
+-- ══════════════════════════════════════════════════════
+CREATE TABLE oracle_move_queue (
+    id             INT          AUTO_INCREMENT PRIMARY KEY,
+    mission_job_id INT          NOT NULL,           -- lien vers cart_mission_jobs
+    of_number      VARCHAR(50)  NOT NULL,           -- FL646PTN_Iter8.4
+    operation_code VARCHAR(10)  NOT NULL,           -- OP10
+    item_code      VARCHAR(50),
+    qty            DECIMAL(10,2) DEFAULT 1,
+    exe_flag       TINYINT(1)   DEFAULT 0,          -- 0=EN ATTENTE  1=FAIT
+    erreur         VARCHAR(200) DEFAULT NULL,       -- message si échec Telnet
+    cree_le        DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    execute_le     DATETIME     DEFAULT NULL,
+    FOREIGN KEY (mission_job_id) REFERENCES cart_mission_jobs(id)
+);
+
+
+-- GAMME STANDARD : toutes les étapes de fabrication par item
+-- BXD (1731) + BXV (1751) — sans filtrer sur Released
+
+SELECT 
+    CASE wdj.ORGANIZATION_ID
+        WHEN 1731 THEN 'BXD'
+        WHEN 1751 THEN 'BXV'
+    END                                                    AS organisation,
+    ite.SEGMENT1                                           AS item_code,
+    ite.DESCRIPTION                                        AS item_desc,
+    NVL(bor.ALTERNATE_ROUTING_DESIGNATOR, 'PRIMARY')       AS gamme_code,
+    bor.ROUTING_SEQUENCE_ID                                AS routing_id,
+    'OP' || LPAD(bos.OPERATION_SEQ_NUM, 2, '0')            AS operation_code,
+    bos.OPERATION_SEQ_NUM                                  AS op_seq,
+    NVL(bso.OPERATION_CODE, 'N/A')                         AS op_label,
+    NVL(bso.DESCRIPTION,    'N/A')                         AS op_desc,
+    bos.EFFECTIVITY_DATE,
+    bos.DISABLE_DATE
+
+FROM 
+    apps.BOM_OPERATIONAL_ROUTINGS   bor
+    JOIN apps.BOM_OPERATION_SEQUENCES   bos 
+        ON  bor.ROUTING_SEQUENCE_ID = bos.ROUTING_SEQUENCE_ID
+    JOIN apps.MTL_SYSTEM_ITEMS_B        ite 
+        ON  bor.ASSEMBLY_ITEM_ID    = ite.INVENTORY_ITEM_ID
+        AND bor.ORGANIZATION_ID     = ite.ORGANIZATION_ID
+    LEFT JOIN apps.BOM_STANDARD_OPERATIONS bso 
+        ON  bos.STANDARD_OPERATION_ID = bso.STANDARD_OPERATION_ID
+
+WHERE 
+    bor.ORGANIZATION_ID              IN (1731, 1751)
+    AND bor.ALTERNATE_ROUTING_DESIGNATOR IS NULL        -- gamme primaire uniquement
+    AND NVL(bos.DISABLE_DATE, SYSDATE + 1) > SYSDATE   -- étapes actives
+
+ORDER BY 
+    organisation,
+    ite.SEGMENT1,
+    bos.OPERATION_SEQ_NUM ASC
+;

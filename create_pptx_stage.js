@@ -16,6 +16,7 @@ const GN = '1E8449'; // Green
 const RD = 'C0392B'; // Red
 const PU = '6C3483'; // Purple
 const NA = '0A1628'; // Navy
+const PURPLE_L = 'F3E5F5'; // Purple Light
 
 const mk = () => ({ type:'outer', blur:6, offset:2, angle:135, color:'000000', opacity:0.10 });
 
@@ -62,7 +63,7 @@ function flowLine(s, statuses, colors, y, x0, stepW, h) {
   s.addText('GE HealthCare', { x:0.45,y:0.4,w:2.8,h:0.65, fontSize:15,bold:true,color:W,align:'center',valign:'middle',margin:0 });
 
   // Badge stage
-  s.addShape(pres.shapes.RECTANGLE, { x:0.45,y:1.25,w:2.2,h:0.4, fill:{color:'FFFFFF20'},line:{color:'FFFFFF40'} });
+  s.addShape(pres.shapes.RECTANGLE, { x:0.45,y:1.25,w:2.2,h:0.4, fill:{color:'FFFFFF',transparency:80},line:{color:'FFFFFF',transparency:60} });
   s.addText('Rapport de Stage – 2025', { x:0.45,y:1.25,w:2.2,h:0.4, fontSize:9,color:'CADCFC',align:'center',valign:'middle',margin:0 });
 
   // Titre principal
@@ -575,8 +576,6 @@ function flowLine(s, statuses, colors, y, x0, stepW, h) {
 
   pageNum(s, '10');
 }
-
-const PURPLE_L = 'F3E5F5';
 
 pres.writeFile({ fileName: 'C:\\Users\\ADMIN\\Desktop\\rfid\\RFID_Stage_Presentation.pptx' })
   .then(() => console.log('[OK] RFID_Stage_Presentation.pptx cree'))
