@@ -890,3 +890,19 @@ AND NOM_LIGNE IN (
 )
 ORDER BY NOM_LIGNE, feeder_num, ASSEMBLY;
 
+
+SELECT 
+    ORGANIZATION    AS organisation,
+    NOM_LIGNE       AS gamme_code,
+    ASSEMBLY        AS item_code,
+    DESCRIPTION     AS item_desc
+
+FROM dbo.LIGNE
+
+WHERE ORGANIZATION IN ('BXD', 'BXV')
+
+ORDER BY 
+    ORGANIZATION,
+    NOM_LIGNE,
+    ASSEMBLY
+;
