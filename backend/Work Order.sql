@@ -828,7 +828,7 @@ CREATE TABLE oracle_move_queue (
 -- BXD (1731) + BXV (1751) — sans filtrer sur Released
 
 SELECT 
-    CASE wdj.ORGANIZATION_ID
+    CASE bor.ORGANIZATION_ID
         WHEN 1731 THEN 'BXD'
         WHEN 1751 THEN 'BXV'
     END                                                    AS organisation,
@@ -839,27 +839,27 @@ SELECT
     'OP' || LPAD(bos.OPERATION_SEQ_NUM, 2, '0')            AS operation_code,
     bos.OPERATION_SEQ_NUM                                  AS op_seq,
     NVL(bso.OPERATION_CODE, 'N/A')                         AS op_label,
-    NVL(bso.DESCRIPTION,    'N/A')                         AS op_desc,
     bos.EFFECTIVITY_DATE,
     bos.DISABLE_DATE
 
 FROM 
     apps.BOM_OPERATIONAL_ROUTINGS   bor
     JOIN apps.BOM_OPERATION_SEQUENCES   bos 
-        ON  bor.ROUTING_SEQUENCE_ID = bos.ROUTING_SEQUENCE_ID
+        ON  bor.ROUTING_SEQUENCE_ID     = bos.ROUTING_SEQUENCE_ID
     JOIN apps.MTL_SYSTEM_ITEMS_B        ite 
-        ON  bor.ASSEMBLY_ITEM_ID    = ite.INVENTORY_ITEM_ID
-        AND bor.ORGANIZATION_ID     = ite.ORGANIZATION_ID
+        ON  bor.ASSEMBLY_ITEM_ID        = ite.INVENTORY_ITEM_ID
+        AND bor.ORGANIZATION_ID         = ite.ORGANIZATION_ID
     LEFT JOIN apps.BOM_STANDARD_OPERATIONS bso 
-        ON  bos.STANDARD_OPERATION_ID = bso.STANDARD_OPERATION_ID
+        ON  bos.STANDARD_OPERATION_ID   = bso.STANDARD_OPERATION_ID
 
 WHERE 
-    bor.ORGANIZATION_ID              IN (1731, 1751)
-    AND bor.ALTERNATE_ROUTING_DESIGNATOR IS NULL        -- gamme primaire uniquement
-    AND NVL(bos.DISABLE_DATE, SYSDATE + 1) > SYSDATE   -- étapes actives
+    bor.ORGANIZATION_ID                  IN (1731, 1751)
+    AND bor.ALTERNATE_ROUTING_DESIGNATOR IS NULL
+    AND NVL(bos.DISABLE_DATE, SYSDATE + 1) > SYSDATE
 
 ORDER BY 
     organisation,
     ite.SEGMENT1,
     bos.OPERATION_SEQ_NUM ASC
 ;
+HH
