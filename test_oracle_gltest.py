@@ -20,6 +20,13 @@ USER     = os.getenv("ORACLE_USER", "SSO250028087")
 PASSWORD = os.getenv("ORACLE_PASSWORD") or getpass.getpass(f"Password SSO ({USER}) : ")
 
 try:
+    # Mode thick — Oracle Instant Client 23
+    try:
+        oracledb.init_oracle_client(lib_dir=r"C:\Users\250028087\Downloads\instantclient-basic-windows.x64-23.26.1.0.0\instantclient_23_0")
+    except Exception:
+        pass   # Déjà initialisé
+
+
     dsn = f"{HOST}:{PORT}/{SERVICE}"
     conn = oracledb.connect(user=USER, password=PASSWORD, dsn=dsn)
     print(f"[OK] Connecte a Oracle GLTEST ({SERVICE})")
