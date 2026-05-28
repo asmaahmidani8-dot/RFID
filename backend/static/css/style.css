@@ -1,0 +1,294 @@
+/* ── GE Healthcare RFID Dashboard ─────────────────────────── */
+
+:root {
+    --ge-blue:   #003087;
+    --ge-teal:   #00857C;
+    --ge-light:  #F4F6F9;
+    --ge-dark:   #1A1A2E;
+    --ge-border: #E2E8F0;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--ge-light); font-family: 'Segoe UI', Arial, sans-serif; margin: 0; }
+
+/* ── NAVBAR ─────────────────────────────────────────────── */
+.ge-navbar {
+    background: var(--ge-blue);
+    padding: 10px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.ge-logo-box {
+    background: white;
+    border-radius: 6px;
+    padding: 4px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    line-height: 1;
+}
+.ge-logo-text { color: var(--ge-blue); font-weight: 900; font-size: 16px; }
+.ge-logo-sub  { color: var(--ge-teal); font-size: 7px; font-weight: 600; letter-spacing: 0.5px; }
+
+.navbar-brand-title { color: white; font-weight: 700; font-size: 15px; }
+.navbar-brand-sub   { color: rgba(255,255,255,0.6); font-size: 11px; }
+.navbar-time        { color: rgba(255,255,255,0.85); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+.live-badge { font-size: 10px; padding: 3px 7px; }
+
+/* ── TABS ───────────────────────────────────────────────── */
+.ge-tabs {
+    background: var(--ge-blue);
+    display: flex;
+    gap: 4px;
+    border-bottom: 3px solid var(--ge-teal);
+}
+.ge-tab {
+    color: rgba(255,255,255,0.65);
+    text-decoration: none;
+    padding: 10px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    border-radius: 6px 6px 0 0;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.ge-tab:hover { color: white; background: rgba(255,255,255,0.1); }
+.ge-tab.active { color: white; background: var(--ge-teal); }
+
+/* ── CONTENT ────────────────────────────────────────────── */
+.ge-content { min-height: calc(100vh - 110px); }
+
+/* ── STAT CARDS ─────────────────────────────────────────── */
+.stat-card {
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+}
+.stat-blue  { background: linear-gradient(135deg, #003087, #0052cc); }
+.stat-teal  { background: linear-gradient(135deg, #00857C, #00a896); }
+.stat-dark  { background: linear-gradient(135deg, #374151, #6b7280); }
+.stat-value { font-size: 2rem; font-weight: 800; line-height: 1; }
+.stat-label { font-size: 11px; opacity: 0.85; margin-top: 4px; }
+
+/* ── BOUTON SCAN PRINCIPAL ──────────────────────────────── */
+.btn-scan-main {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, var(--ge-teal), #00a896);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    padding: 18px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-decoration: none;
+    box-shadow: 0 4px 15px rgba(0,133,124,0.4);
+    letter-spacing: 0.5px;
+    transition: transform 0.15s, box-shadow 0.15s;
+}
+.btn-scan-main:hover, .btn-scan-main:active {
+    color: white;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(0,133,124,0.5);
+}
+
+/* ── SECTION TITLE ──────────────────────────────────────── */
+.section-title {
+    color: var(--ge-blue);
+    font-weight: 700;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* ── MISSION CARDS ──────────────────────────────────────── */
+.missions-list { display: flex; flex-direction: column; gap: 10px; }
+
+.mission-card {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    border-left: 4px solid var(--ge-teal);
+}
+.mission-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.mission-body { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ── BADGES ─────────────────────────────────────────────── */
+.chariot-badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+    color: white;
+}
+.chariot-badge.type-a { background: var(--ge-blue); }
+.chariot-badge.type-b { background: #7c3aed; }
+.chariot-badge.type-c { background: #d97706; }
+.chariot-badge.type-d { background: #059669; }
+
+.statut-badge {
+    font-size: 11px;
+    font-weight: 600;
+    padding: 2px 10px;
+    border-radius: 20px;
+}
+.statut-released  { background: #dbeafe; color: #1d4ed8; }
+.statut-preparee  { background: #fef3c7; color: #92400e; }
+.statut-assigne   { background: #d1fae5; color: #065f46; }
+.statut-en_cours  { background: #e0e7ff; color: #3730a3; }
+.statut-termine   { background: #f3f4f6; color: #374151; }
+
+.info-chip {
+    background: var(--ge-light);
+    border: 1px solid var(--ge-border);
+    border-radius: 20px;
+    font-size: 12px;
+    padding: 2px 10px;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* ── QR SCANNER ─────────────────────────────────────────── */
+.qr-reader-container {
+    position: relative;
+    border-radius: 16px;
+    overflow: hidden;
+    background: #000;
+    max-width: 100%;
+}
+#qr-reader, #qr-reader-2 {
+    width: 100% !important;
+    border: none !important;
+}
+#qr-reader video, #qr-reader-2 video { width: 100% !important; }
+#qr-reader img, #qr-reader-2 img { display: none !important; }
+#qr-reader button, #qr-reader-2 button { display: none !important; }
+#qr-reader select, #qr-reader-2 select { display: none !important; }
+
+.scan-status-box {
+    background: white;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 14px;
+    color: #374151;
+    border: 1px solid var(--ge-border);
+    text-align: center;
+}
+
+.alert-groupe {
+    background: #d1fae5;
+    border-radius: 10px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    font-size: 14px;
+    color: #065f46;
+}
+
+/* ── CHARIOT INFO CARD ──────────────────────────────────── */
+.chariot-info-card {
+    background: linear-gradient(135deg, var(--ge-blue), #0052cc);
+    color: white;
+    border-radius: 14px;
+    padding: 16px;
+}
+
+/* ── JOBS SELECTION ─────────────────────────────────────── */
+.assembly-group {
+    background: white;
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+}
+.assembly-title {
+    font-weight: 700;
+    color: var(--ge-blue);
+    font-size: 13px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.job-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid var(--ge-border);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.job-option:hover { border-color: var(--ge-teal); background: #f0fffe; }
+.job-option.selected { border-color: var(--ge-teal); background: #e6fffe; }
+.job-option input[type="radio"] { margin-top: 2px; accent-color: var(--ge-teal); }
+
+.job-of-number { font-weight: 700; font-size: 14px; color: var(--ge-blue); }
+.job-meta { font-size: 12px; color: #6b7280; }
+.job-date { font-size: 11px; color: var(--ge-teal); font-weight: 600; }
+
+/* ── BOUTON ASSIGNER ────────────────────────────────────── */
+.btn-assign-main {
+    background: linear-gradient(135deg, var(--ge-blue), #0052cc);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    padding: 18px;
+    font-size: 1.05rem;
+    font-weight: 700;
+    cursor: pointer;
+    box-shadow: 0 4px 15px rgba(0,48,135,0.35);
+    letter-spacing: 0.5px;
+    transition: transform 0.15s;
+    display: none;
+}
+.btn-assign-main:hover { transform: translateY(-1px); }
+
+/* ── SUCCÈS ─────────────────────────────────────────────── */
+.succes-card { background: white; border-radius: 16px; padding: 30px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+.succes-icon { font-size: 4rem; }
+
+/* ── TABLE ──────────────────────────────────────────────── */
+.ge-table { font-size: 13px; }
+.ge-table thead th { background: var(--ge-blue); color: white; font-weight: 600; }
+.ge-table tbody tr:hover { background: #f0fffe; }
+.item-code { font-family: monospace; font-size: 12px; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+.op-badge  { background: var(--ge-teal); color: white; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+
+/* ── BUTTONS ────────────────────────────────────────────── */
+.btn-ge-primary {
+    background: var(--ge-blue);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 8px 20px;
+    font-weight: 600;
+    text-decoration: none;
+}
+.btn-ge-primary:hover { background: #002070; color: white; }
+
+/* ── EMPTY STATE ────────────────────────────────────────── */
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    background: white;
+    border-radius: 14px;
+}

@@ -19,13 +19,23 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 # ── Dépendances ───────────────────────────────────────────────
 try:
     import oracledb
+    import platform
     # Mode thick — nécessaire pour Oracle GE Healthcare (verifier 10g)
-    try:
-        oracledb.init_oracle_client(
-            lib_dir=r"C:\Users\250028087\Downloads\instantclient-basic-windows.x64-23.26.1.0.0\instantclient_23_0"
-        )
-    except Exception:
-        pass   # Déjà initialisé
+    if platform.system() == "Windows":
+        try:
+            oracledb.init_oracle_client(
+                lib_dir=r"C:\Users\250028087\Downloads\instantclient-basic-windows.x64-23.26.1.0.0\instantclient_23_0"
+            )
+        except Exception:
+            pass   # Déjà initialisé
+    elif platform.system() == "Linux":
+        try:
+            oracledb.init_oracle_client(
+                lib_dir="/home/ge/instantclient_23_26"
+            )
+            print("[OK] Oracle Instant Client ARM64 chargé")
+        except Exception as e:
+            print(f"[WARN] init_oracle_client : {e}")
 except ImportError:
     print("[ERR] oracledb non installé → pip install oracledb")
     sys.exit(1)

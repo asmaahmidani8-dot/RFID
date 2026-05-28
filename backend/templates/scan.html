@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Scanner{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3">
+
+    <!-- ZONE SCAN -->
+    <div id="zone-scan">
+        <div class="scan-header mb-3">
+            <h5 class="mb-1"><i class="bi bi-qr-code-scan me-2"></i>Scanner le chariot</h5>
+            <p class="text-muted small mb-0">Pointez la caméra vers le QR code du chariot</p>
+        </div>
+
+        <div class="qr-reader-container mb-3">
+            <div id="qr-reader"></div>
+            <div class="qr-overlay">
+                <div class="qr-corner tl"></div>
+                <div class="qr-corner tr"></div>
+                <div class="qr-corner bl"></div>
+                <div class="qr-corner br"></div>
+            </div>
+        </div>
+
+        <div id="scan-status" class="scan-status-box">
+            <i class="bi bi-camera me-2"></i>Caméra en attente...
+        </div>
+    </div>
+
+    <!-- RÉSULTAT SCAN 1 (groupe Type B) -->
+    <div id="zone-groupe-2" class="d-none">
+        <div class="alert-groupe">
+            <i class="bi bi-check-circle-fill text-success me-2"></i>
+            <strong id="msg-scan1"></strong>
+        </div>
+        <div class="scan-header mb-3">
+            <h5 class="mb-1"><i class="bi bi-qr-code-scan me-2"></i>Scanner le 2ème chariot</h5>
+            <p class="text-muted small mb-0">Scannez le chariot partenaire du groupe</p>
+        </div>
+        <div class="qr-reader-container mb-3">
+            <div id="qr-reader-2"></div>
+        </div>
+    </div>
+
+    <!-- RÉSULTAT : CHOIX DES OFs -->
+    <div id="zone-jobs" class="d-none">
+        <div id="chariot-info-card" class="chariot-info-card mb-3"></div>
+
+        <h6 class="section-title mb-3">
+            <i class="bi bi-list-check me-2"></i>Choisir les OFs à assigner
+        </h6>
+
+        <div id="jobs-container"></div>
+
+        <button id="btn-assigner" class="btn-assign-main w-100 mt-3 d-none" onclick="confirmerAssignation()">
+            <i class="bi bi-check-circle me-2"></i>ASSIGNER LES OFs SÉLECTIONNÉS
+        </button>
+    </div>
+
+    <!-- SUCCÈS -->
+    <div id="zone-succes" class="d-none">
+        <div class="succes-card text-center py-5">
+            <div class="succes-icon mb-3">✅</div>
+            <h4 class="text-success">Mission créée !</h4>
+            <p id="succes-msg" class="text-muted"></p>
+            <a href="/" class="btn btn-ge-primary me-2">Dashboard</a>
+            <a href="/scan" class="btn btn-outline-secondary">Nouveau scan</a>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/static/js/scan.js"></script>
+{% endblock %}

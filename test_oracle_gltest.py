@@ -18,7 +18,7 @@ print("=" * 60)
 print("Connexion Oracle GLTEST — GE Healthcare")
 print("=" * 60)
 USER     = os.getenv("ORACLE_USER", "SSO250028087")
-PASSWORD = os.getenv("ORACLE_PASSWORD") or getpass.getpass(f"Password SSO ({USER}) : ")
+PASSWORD = "Q"
 
 try:
     # Mode thick — Oracle Instant Client (Windows ou Linux ARM64)

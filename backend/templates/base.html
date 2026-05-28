@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>{% block title %}RFID BUC{% endblock %} — GE HealthCare</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="/static/css/style.css" rel="stylesheet">
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-dark ge-navbar px-3">
+    <div class="d-flex align-items-center gap-3">
+        <div class="ge-logo-box">
+            <span class="ge-logo-text">GE</span>
+            <span class="ge-logo-sub">HealthCare</span>
+        </div>
+        <div>
+            <div class="navbar-brand-title">RFID Pristina</div>
+            <div class="navbar-brand-sub">GE Healthcare Buc</div>
+        </div>
+    </div>
+    <div class="d-flex align-items-center gap-2">
+        <span class="badge bg-success live-badge"><i class="bi bi-circle-fill me-1" style="font-size:8px"></i>LIVE</span>
+        <span class="navbar-time" id="navbar-time"></span>
+    </div>
+</nav>
+
+<!-- NAV TABS -->
+<div class="ge-tabs px-3 py-0">
+    <a href="/" class="ge-tab {% if request.path == '/' %}active{% endif %}">
+        <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+    <a href="/scan" class="ge-tab {% if request.path == '/scan' %}active{% endif %}">
+        <i class="bi bi-qr-code-scan"></i> Scanner
+    </a>
+    <a href="/jobs" class="ge-tab {% if request.path == '/jobs' %}active{% endif %}">
+        <i class="bi bi-list-task"></i> OFs Released
+    </a>
+</div>
+
+<!-- CONTENT -->
+<div class="ge-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show mx-3 mt-3">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // Horloge navbar
+    function updateTime() {
+        const now = new Date();
+        document.getElementById('navbar-time').textContent =
+            now.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+    }
+    updateTime();
+    setInterval(updateTime, 1000);
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
