@@ -5,6 +5,7 @@ Test connexion Oracle GLTEST — OFs Released BUC
 import oracledb
 import getpass
 import os
+import platform
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '.env'))
@@ -20,12 +21,22 @@ USER     = os.getenv("ORACLE_USER", "SSO250028087")
 PASSWORD = os.getenv("ORACLE_PASSWORD") or getpass.getpass(f"Password SSO ({USER}) : ")
 
 try:
-    # Mode thick — Oracle Instant Client 23
-    try:
-        oracledb.init_oracle_client(lib_dir=r"C:\Users\250028087\Downloads\instantclient-basic-windows.x64-23.26.1.0.0\instantclient_23_0")
-    except Exception:
-        pass   # Déjà initialisé
-
+    # Mode thick — Oracle Instant Client (Windows ou Linux ARM64)
+    if platform.system() == "Windows":
+        try:
+            oracledb.init_oracle_client(
+                lib_dir=r"C:\Users\250028087\Downloads\instantclient-basic-windows.x64-23.26.1.0.0\instantclient_23_0"
+            )
+        except Exception:
+            pass   # Deja initialise
+    elif platform.system() == "Linux":
+        try:
+            oracledb.init_oracle_client(
+                lib_dir="/home/ge/instantclient_23_26"
+            )
+            print("[OK] Oracle Instant Client ARM64 charge")
+        except Exception as e:
+            print(f"[WARN] init_oracle_client : {e}")
 
     dsn = f"{HOST}:{PORT}/{SERVICE}"
     conn = oracledb.connect(user=USER, password=PASSWORD, dsn=dsn)
