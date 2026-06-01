@@ -57,7 +57,7 @@ ORACLE_USER    = os.getenv("ORACLE_USER",    "SSO250028087")
 ORACLE_PASS    = os.getenv("ORACLE_PASSWORD", "")   # via .env ou saisie
 
 ORACLE_ORG     = "1731"   # BUC Pristina
-ORACLE_JOURS   = 90       # OFs créés dans les 90 derniers jours
+ORACLE_JOURS   = 365      # OFs créés dans les 12 derniers mois
 
 
 # ══════════════════════════════════════════════════════════════
@@ -95,7 +95,6 @@ SQL_ORACLE = f"""
         AND wdj.STATUS_TYPE      = 3
         AND wdj.ORGANIZATION_ID  = '{ORACLE_ORG}'
         AND wdj.CREATION_DATE    > SYSDATE - {ORACLE_JOURS}
-        AND NVL(wop.QUANTITY_COMPLETED, 0) < wdj.START_QUANTITY
     ORDER BY
         wdj.SCHEDULED_COMPLETION_DATE ASC,
         wen.WIP_ENTITY_NAME ASC,
@@ -205,13 +204,39 @@ def synchroniser(conn_oracle, conn_mysql):
             print(f"  [ERR] {of_number}/{operation_code} : {e}")
 
     conn_mysql.commit()
+
+    # ── 3. Fermer les jobs RELEASED dans MySQL mais absents d'Oracle ──
+    # Construire la liste des clés Oracle (of_number, operation_code)
+    cles_oracle = set()
+    for row in rows:
+        of_number_r, _, _, operation_code_r, _, _, _ = row
+        cles_oracle.add((str(of_number_r), str(operation_code_r)))
+
+    # Récupérer tous les jobs RELEASED dans MySQL
+    cur_mysql.execute("""
+        SELECT of_number, operation_code FROM jobs_planning
+        WHERE statut = 'RELEASED'
+    """)
+    jobs_mysql = cur_mysql.fetchall()
+
+    nb_closed = 0
+    for (of_m, op_m) in jobs_mysql:
+        if (str(of_m), str(op_m)) not in cles_oracle:
+            cur_mysql.execute("""
+                UPDATE jobs_planning SET statut = 'CLOSED'
+                WHERE of_number = %s AND operation_code = %s AND statut = 'RELEASED'
+            """, (of_m, op_m))
+            nb_closed += 1
+
+    conn_mysql.commit()
     cur_mysql.close()
 
-    # ── 3. Résumé ─────────────────────────────────────────────
+    # ── 4. Résumé ─────────────────────────────────────────────
     print(f"\n{'─'*45}")
     print(f"  Nouveaux insérés  : {nb_new}")
     print(f"  Mis à jour        : {nb_upd}")
     print(f"  Inchangés         : {nb_skip}")
+    print(f"  Fermés (CLOSED)   : {nb_closed}")
     print(f"  Erreurs           : {nb_err}")
     print(f"  Total Oracle      : {len(rows)}")
     print(f"{'─'*45}")
@@ -227,13 +252,12 @@ def afficher_jobs(conn_mysql):
                qty_faite, qty_totale, date_besoin, statut
         FROM jobs_planning
         ORDER BY date_besoin ASC, of_number ASC, operation_code ASC
-        LIMIT 50
     """)
     rows = cur.fetchall()
     cur.close()
 
     print(f"\n{'='*90}")
-    print(f"  JOBS_PLANNING — {len(rows)} enregistrement(s) (max 50 affichés)")
+    print(f"  JOBS_PLANNING — {len(rows)} enregistrement(s)")
     print(f"{'='*90}")
     print(f"{'OF':<22} {'ITEM':<14} {'OP':>5}  {'QF':>5}{'QT':>6}  {'DATE BESOIN':<12}  STATUT")
     print("-"*90)
