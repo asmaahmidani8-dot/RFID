@@ -1451,3 +1451,117 @@ except oracledb.Error as e:
     print(f"[ERR Oracle] {e}")
 except Exception as e:
     print(f"[ERR] {e}")
+
+
+
+
+
+============================================================
+Connexion Oracle GLTEST — GE Healthcare
+============================================================
+[OK] Connecte a Oracle GLTEST (ebs_gltest)
+
+[OFs Released BUC (org 1731) — 100 lignes]
+
+NUM JOB              ITEM CODE          OP  QTY_F  QTY_T  DESCRIPTION
+------------------------------------------------------------------------------------------
+29330993             5582319-3        OP10      0      7  Universal Face Shield
+29345315             7201172-2-RA     OP10      0      1  FRU Biopsy Positioner Repair
+SKD29PTN_C3          5920731          OP15      0      1  Senographe Pristina Buc for Ch
+SKD29PTN_C3          5920731          OP16      0      1  Senographe Pristina Buc for Ch
+SKD29PTN_C3          5920731          OP17      0      1  Senographe Pristina Buc for Ch
+WD232PTN_Iter9       S30371WD         OP13      0      1  Senographe Pristina Via it9
+WD232PTN_Iter9       S30371WD         OP14      0      1  Senographe Pristina Via it9
+WD232PTN_Iter9       S30371WD         OP15      0      1  Senographe Pristina Via it9
+WD232PTN_Iter9       S30371WD         OP16      0      1  Senographe Pristina Via it9
+WD232PTN_Iter9       S30371WD         OP17      0      1  Senographe Pristina Via it9
+29353622             5582319-3        OP10      0     10  Universal Face Shield
+AA59PTN_Iter10       S30381AA         OP13      0      1  Senographe Pristina it10 Fixed
+AA59PTN_Iter10       S30381AA         OP14      0      1  Senographe Pristina it10 Fixed
+AA59PTN_Iter10       S30381AA         OP15      0      1  Senographe Pristina it10 Fixed
+AA59PTN_Iter10       S30381AA         OP16      0      1  Senographe Pristina it10 Fixed
+AA59PTN_Iter10       S30381AA         OP17      0      1  Senographe Pristina it10 Fixed
+AA60PTN_Iter10       S30381AA         OP13      0      1  Senographe Pristina it10 Fixed
+AA60PTN_Iter10       S30381AA         OP14      0      1  Senographe Pristina it10 Fixed
+AA60PTN_Iter10       S30381AA         OP15      0      1  Senographe Pristina it10 Fixed
+AA60PTN_Iter10       S30381AA         OP16      0      1  Senographe Pristina it10 Fixed
+AA60PTN_Iter10       S30381AA         OP17      0      1  Senographe Pristina it10 Fixed
+AB38PTN_Iter10       S30381AB         OP13      0      1  Senographe Pristina it10 Ajust
+AB38PTN_Iter10       S30381AB         OP14      0      1  Senographe Pristina it10 Ajust
+AB38PTN_Iter10       S30381AB         OP15      0      1  Senographe Pristina it10 Ajust
+AB38PTN_Iter10       S30381AB         OP16      0      1  Senographe Pristina it10 Ajust
+AB38PTN_Iter10       S30381AB         OP17      0      1  Senographe Pristina it10 Ajust
+AB38PTN_Iter10       S30381AB         OP18      0      1  Senographe Pristina it10 Ajust
+FL654PTN_Iter8.4     S30371FL         OP13      0      1  Senographe Pristina 8.4
+FL654PTN_Iter8.4     S30371FL         OP14      0      1  Senographe Pristina 8.4
+FL654PTN_Iter8.4     S30371FL         OP15      0      1  Senographe Pristina 8.4
+FL654PTN_Iter8.4     S30371FL         OP16      0      1  Senographe Pristina 8.4
+FL654PTN_Iter8.4     S30371FL         OP17      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP90      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP10      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP11      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP13      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP14      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP15      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP16      0      1  Senographe Pristina 8.4
+FL655PTN_Iter8.4     S30371FL         OP17      0      1  Senographe Pristina 8.4
+VG78PTN_Iter8.3_2D   S30371VG         OP90      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP10      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP11      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP13      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP14      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP15      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP16      0      1  Senographe Pristina 8.3 2D
+VG78PTN_Iter8.3_2D   S30371VG         OP17      0      1  Senographe Pristina 8.3 2D
+AA61PTN_Iter10       S30381AA         OP70      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP80      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP90      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP10      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP11      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP13      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP14      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP15      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP16      0      1  Senographe Pristina it10 Fixed
+AA61PTN_Iter10       S30381AA         OP17      0      1  Senographe Pristina it10 Fixed
+WH51PTN_Iter8.4_Lite S30371WH         OP70      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP80      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP90      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP10      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP11      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP13      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP14      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP15      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP16      0      1  Senographe Pristina Duo
+WH51PTN_Iter8.4_Lite S30371WH         OP17      0      1  Senographe Pristina Duo
+AA62PTN_Iter10       S30381AA         OP70      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP80      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP90      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP10      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP11      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP13      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP14      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP15      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP16      0      1  Senographe Pristina it10 Fixed
+AA62PTN_Iter10       S30381AA         OP17      0      1  Senographe Pristina it10 Fixed
+29365866             5582304-2        OP10      0      1  2D Faceshield
+29371536             5582304-2        OP10      0     10  2D Faceshield
+29371538             5795137          OP10      0     15  Breast Spacer CDRH
+29371543             S30371TZ         OP10      0      1  Mobile kit IT9
+29371547             5653880          OP10      0     10  Mag Stand 1.8 CDRH
+29371548             S30381BC         OP10      0     10  Senographe Pristina it10 Upgra
+29371549             S30381BC         OP10      0     10  Senographe Pristina it10 Upgra
+29371550             S30381BC         OP10      0     10  Senographe Pristina it10 Upgra
+29371551             S30381BC         OP10      0     10  Senographe Pristina it10 Upgra
+29371554             5653882          OP10      0     17  Mag Stand 1.5 CDRH
+FL656PTN_Iter8.4     S30371FL         OP20      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP25      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP70      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP80      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP90      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP10      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP11      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP13      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP14      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP15      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP16      0      1  Senographe Pristina 8.4
+FL656PTN_Iter8.4     S30371FL         OP17      0      1  Senographe Pristina 8.4
