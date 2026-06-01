@@ -1,15 +1,22 @@
 /**
  * scan.js — Logique scan QR code + assignation OF
- * GE Healthcare Buc RFID
+ * GE Healthcare Buc | Ligne Pristina | RFID
+ *
+ * Flux :
+ *  1. Scanner le QR chariot  → /api/scan  → afficher info chariot (zone-chariot)
+ *  1b. (Type B) Scanner 2ème chariot
+ *  2. Cliquer "CHERCHER LES JOBS" → /api/jobs (sync Oracle) → afficher OFs (zone-jobs)
+ *  3. Sélectionner les OFs
+ *  4. Confirmer → /api/mission/create → zone-succes
  */
 
 let scanner1 = null;
 let scanner2 = null;
 let currentChariot  = null;
 let currentChariot2 = null;
-let jobsData = {};  // { item_code: [of_number, ...] }
+let jobsData = {};
 
-// ── Démarrer le scanner ────────────────────────────────────
+// ── Démarrer le scanner au chargement ─────────────────────────
 window.addEventListener("DOMContentLoaded", () => {
     demarrerScanner1();
 });
@@ -20,7 +27,7 @@ function demarrerScanner1() {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         onScan1,
-        (err) => {}
+        () => {}
     ).then(() => {
         setStatus("Caméra active — pointez le QR code du chariot", "info");
     }).catch(err => {
@@ -35,7 +42,7 @@ function onScan1(qrContent) {
     });
 }
 
-// ── Envoyer le scan au serveur ─────────────────────────────
+// ── Envoyer le scan au serveur ─────────────────────────────────
 function envoyerScan(qrContent) {
     fetch("/api/scan", {
         method: "POST",
@@ -44,34 +51,32 @@ function envoyerScan(qrContent) {
     })
     .then(r => r.json())
     .then(data => {
+        if (data.action === "mission_active") {
+            afficherMissionActive(data);
+            return;
+        }
+
         if (data.error) {
             setStatus("❌ " + data.error, "error");
-            // Relancer le scanner après 2s
-            setTimeout(() => {
-                if (data.action === "erreur_groupe") {
-                    demarrerScanner1();
-                } else {
-                    demarrerScanner1();
-                }
-            }, 2500);
+            setTimeout(() => demarrerScanner1(), 2500);
             return;
         }
 
         if (data.action === "scan_groupe_2") {
-            // Type B → attendre 2ème scan
+            // Type B — attendre 2ème scan
             afficherAttenteGroupe(data);
 
         } else if (data.action === "groupe_forme") {
-            // Groupe formé → afficher les OFs
+            // Groupe formé → afficher info + bouton
             currentChariot  = data.chariot1;
             currentChariot2 = data.chariot2;
-            afficherJobs(data.chariot1, data.chariot2, data.jobs);
+            afficherChariot(data.chariot1, data.chariot2);
 
-        } else if (data.action === "assigner") {
-            // Type A/C/D → afficher les OFs
+        } else if (data.action === "chariot_identifie") {
+            // Type A / C / D → afficher info + bouton
             currentChariot  = data.chariot;
             currentChariot2 = null;
-            afficherJobs(data.chariot, null, data.jobs);
+            afficherChariot(data.chariot, null);
         }
     })
     .catch(err => {
@@ -79,7 +84,52 @@ function envoyerScan(qrContent) {
     });
 }
 
-// ── Attente 2ème scan (groupe Type B) ─────────────────────
+// ── Mission active — blocage rescan ───────────────────────────
+function afficherMissionActive(data) {
+    document.getElementById("zone-scan").classList.add("d-none");
+    document.getElementById("zone-groupe-2").classList.add("d-none");
+    document.getElementById("zone-chariot").classList.add("d-none");
+    document.getElementById("zone-jobs").classList.add("d-none");
+
+    const statut = data.statut || "EN COURS";
+    const couleur = statut === "EN_ATTENTE" ? "#f59e0b" : "#3b82f6";
+
+    let zoneActive = document.getElementById("zone-mission-active");
+    if (!zoneActive) {
+        zoneActive = document.createElement("div");
+        zoneActive.id = "zone-mission-active";
+        document.querySelector(".ge-content").appendChild(zoneActive);
+    }
+
+    zoneActive.classList.remove("d-none");
+    zoneActive.innerHTML = `
+        <div class="mx-3 mt-4">
+            <div class="mission-card" style="border-left:4px solid ${couleur}">
+                <div class="mission-header">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="bi bi-exclamation-triangle-fill" style="color:${couleur};font-size:1.3rem"></i>
+                        <strong>Chariot déjà en mission active</strong>
+                    </div>
+                    <span class="statut-badge" style="background:${couleur};color:#fff">
+                        ${statut.replace('_', ' ')}
+                    </span>
+                </div>
+                <div class="mission-body mt-2">
+                    <span class="info-chip"><i class="bi bi-hash"></i> Mission #${data.mission_id}</span>
+                    <p class="mt-2 text-muted small mb-0">
+                        Ce chariot a une mission en cours. Il faut scanner le badge
+                        <strong>END</strong> pour terminer la mission avant de pouvoir
+                        assigner un nouvel OF.
+                    </p>
+                </div>
+            </div>
+            <button class="btn-chercher mt-3 w-100" onclick="resetScan()">
+                <i class="bi bi-arrow-repeat me-2"></i>Scanner un autre chariot
+            </button>
+        </div>`;
+}
+
+// ── ÉTAPE 1b : Attente 2ème scan (groupe Type B) ──────────────
 function afficherAttenteGroupe(data) {
     document.getElementById("zone-scan").classList.add("d-none");
     document.getElementById("zone-groupe-2").classList.remove("d-none");
@@ -90,29 +140,32 @@ function afficherAttenteGroupe(data) {
         { facingMode: "environment" },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         onScan2,
-        (err) => {}
+        () => {}
     );
 }
 
 function onScan2(qrContent) {
     scanner2.stop().then(() => {
-        envoyerScan(qrContent);
         document.getElementById("zone-groupe-2").classList.add("d-none");
+        envoyerScan(qrContent);
     });
 }
 
-// ── Afficher les OFs compatibles ───────────────────────────
-function afficherJobs(chariot, chariot2, jobs) {
+// ── ÉTAPE 2 : Chariot identifié → afficher la carte + bouton ──
+function afficherChariot(chariot, chariot2) {
     document.getElementById("zone-scan").classList.add("d-none");
     document.getElementById("zone-groupe-2").classList.add("d-none");
-    document.getElementById("zone-jobs").classList.remove("d-none");
+    document.getElementById("zone-chariot").classList.remove("d-none");
 
-    // Info chariot
-    const infoCard = document.getElementById("chariot-info-card");
-    let groupeHtml = chariot2
+    document.getElementById("chariot-info-card").innerHTML =
+        buildChariotCardHtml(chariot, chariot2);
+}
+
+function buildChariotCardHtml(chariot, chariot2) {
+    const groupeHtml = chariot2
         ? `<span class="ms-2 badge bg-light text-dark">+ ${chariot2.chariot_id}</span>`
         : "";
-    infoCard.innerHTML = `
+    return `
         <div class="d-flex justify-content-between align-items-start">
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
@@ -125,8 +178,53 @@ function afficherJobs(chariot, chariot2, jobs) {
                 <div style="font-size:13px; opacity:0.85">Opération</div>
                 <div style="font-size:1.4rem; font-weight:800">OP${chariot.operation_code}</div>
             </div>
-        </div>
-    `;
+        </div>`;
+}
+
+// ── ÉTAPE 2 → 3 : Bouton "CHERCHER LES JOBS" ──────────────────
+function chercherJobs() {
+    const btn = document.getElementById("btn-chercher");
+    btn.disabled = true;
+
+    afficherSpinner("Sync Oracle en cours...");
+
+    fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            chariot_id:  currentChariot.chariot_id,
+            chariot2_id: currentChariot2 ? currentChariot2.chariot_id : null
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        cacherSpinner();
+        btn.disabled = false;
+
+        if (data.error) {
+            alert("Erreur sync : " + data.error);
+            return;
+        }
+        if (!data.sync_ok) {
+            setStatus("⚠️ Oracle inaccessible — données en cache local", "error");
+        }
+        afficherJobs(currentChariot, currentChariot2, data.jobs);
+    })
+    .catch(err => {
+        cacherSpinner();
+        btn.disabled = false;
+        alert("Erreur réseau : " + err);
+    });
+}
+
+// ── ÉTAPE 3 : Afficher les OFs compatibles ────────────────────
+function afficherJobs(chariot, chariot2, jobs) {
+    document.getElementById("zone-chariot").classList.add("d-none");
+    document.getElementById("zone-jobs").classList.remove("d-none");
+
+    // Info chariot en haut de la zone-jobs
+    document.getElementById("chariot-info-card-2").innerHTML =
+        buildChariotCardHtml(chariot, chariot2);
 
     if (jobs.length === 0) {
         document.getElementById("jobs-container").innerHTML = `
@@ -134,10 +232,60 @@ function afficherJobs(chariot, chariot2, jobs) {
                 <i class="bi bi-inbox" style="font-size:2rem; color:#ccc"></i>
                 <p class="mt-2 text-muted">Aucun OF Released compatible avec ce chariot</p>
             </div>`;
+        document.getElementById("btn-assigner").style.display = "none";
         return;
     }
 
-    // Grouper par assembly (item_code)
+    jobsData = {};
+
+    const nbJobs = chariot.nb_jobs || 1;
+
+    if (nbJobs === 1) {
+        // ── NB_JOBS = 1 : liste plate, WS choisit UN seul OF ──
+        afficherJobsPlat(jobs);
+    } else {
+        // ── NB_JOBS > 1 : groupé par assembly, un OF par groupe ─
+        afficherJobsGroupes(jobs);
+    }
+
+    mettreAJourBouton();
+}
+
+// Liste plate — 1 seul OF à choisir parmi tous les modèles
+function afficherJobsPlat(jobs) {
+    jobsData["_selection"] = null;
+    let html = `
+    <div class="assembly-group">
+        <div class="assembly-title mb-2">
+            <i class="bi bi-arrow-right-circle"></i>
+            Choisir le modèle en cours d'assemblage
+        </div>
+        <div class="job-options-list" data-item="_selection">`;
+
+    jobs.forEach(j => {
+        html += `
+            <div class="job-option"
+                 onclick="selectionnerJob(this, '_selection', '${j.of_number}', '${j.operation_code}', '${j.item_code}')">
+                <input type="radio" name="job__selection" value="${j.of_number}">
+                <div class="flex-grow-1">
+                    <div class="job-of-number">${j.of_number}</div>
+                    <div class="job-meta" style="font-weight:600; color:#176782">${j.assembly_name || j.item_desc || ''}</div>
+                    <div class="job-meta">${j.item_code}</div>
+                    <div class="job-date"><i class="bi bi-calendar3 me-1"></i>${j.date_besoin || '—'}</div>
+                </div>
+                <div class="text-end">
+                    <div style="font-size:11px; color:#6b7280">Qté</div>
+                    <div style="font-weight:700">${j.qty_totale || 0}</div>
+                </div>
+            </div>`;
+    });
+
+    html += `</div></div>`;
+    document.getElementById("jobs-container").innerHTML = html;
+}
+
+// Groupé par assembly — un OF par groupe (nb_jobs > 1)
+function afficherJobsGroupes(jobs) {
     const grouped = {};
     jobs.forEach(j => {
         const key = j.item_code;
@@ -145,25 +293,24 @@ function afficherJobs(chariot, chariot2, jobs) {
         grouped[key].jobs.push(j);
     });
 
-    jobsData = {};
     let html = "";
-
     Object.entries(grouped).forEach(([item_code, group]) => {
         jobsData[item_code] = null;
+        const auto = group.jobs.length === 1;
         html += `
         <div class="assembly-group">
             <div class="assembly-title">
                 <i class="bi bi-box-seam"></i>
-                ${group.name} <span class="text-muted fw-normal">(${item_code})</span>
-                ${group.jobs.length === 1 ? '<span class="badge bg-success ms-2">Auto</span>' : ''}
+                ${group.name}
+                <span class="text-muted fw-normal">(${item_code})</span>
+                ${auto ? '<span class="badge bg-success ms-2">Auto</span>' : ''}
             </div>
             <div class="job-options-list" data-item="${item_code}">`;
 
-        group.jobs.forEach((j, idx) => {
-            const auto = group.jobs.length === 1;
+        group.jobs.forEach(j => {
             html += `
                 <div class="job-option ${auto ? 'selected' : ''}"
-                     onclick="selectionnerJob(this, '${item_code}', '${j.of_number}', '${j.operation_code}')">
+                     onclick="selectionnerJob(this, '${item_code}', '${j.of_number}', '${j.operation_code}', '${j.item_code}')">
                     <input type="radio" name="job_${item_code}" value="${j.of_number}" ${auto ? 'checked' : ''}>
                     <div class="flex-grow-1">
                         <div class="job-of-number">${j.of_number}</div>
@@ -175,10 +322,8 @@ function afficherJobs(chariot, chariot2, jobs) {
                         <div style="font-weight:700">${j.qty_totale || 0}</div>
                     </div>
                 </div>`;
-
-            // Auto-sélection si 1 seul OF
             if (auto) {
-                jobsData[item_code] = { of_number: j.of_number, op_code: j.operation_code };
+                jobsData[item_code] = { of_number: j.of_number, op_code: j.operation_code, item_code };
             }
         });
 
@@ -186,38 +331,32 @@ function afficherJobs(chariot, chariot2, jobs) {
     });
 
     document.getElementById("jobs-container").innerHTML = html;
-    mettreAJourBouton();
 }
 
-// ── Sélectionner un OF ─────────────────────────────────────
-function selectionnerJob(el, item_code, of_number, op_code) {
-    // Désélectionner les autres dans ce groupe
+// ── Sélectionner un OF ────────────────────────────────────────
+function selectionnerJob(el, group_key, of_number, op_code, item_code) {
     el.closest(".job-options-list").querySelectorAll(".job-option").forEach(o => {
         o.classList.remove("selected");
         o.querySelector("input").checked = false;
     });
     el.classList.add("selected");
     el.querySelector("input").checked = true;
-    jobsData[item_code] = { of_number, op_code };
+    // item_code réel (pour nb_jobs=1, group_key="_selection")
+    const real_item = item_code || group_key;
+    jobsData[group_key] = { of_number, op_code, item_code: real_item };
     mettreAJourBouton();
 }
 
 function mettreAJourBouton() {
     const allSelected = Object.values(jobsData).every(v => v !== null);
     const btn = document.getElementById("btn-assigner");
-    if (allSelected && Object.keys(jobsData).length > 0) {
-        btn.style.display = "flex";
-        btn.style.alignItems = "center";
-        btn.style.justifyContent = "center";
-    } else {
-        btn.style.display = "none";
-    }
+    btn.style.display = (allSelected && Object.keys(jobsData).length > 0) ? "flex" : "none";
 }
 
-// ── Confirmer l'assignation ────────────────────────────────
+// ── ÉTAPE 4 : Confirmer l'assignation ─────────────────────────
 function confirmerAssignation() {
-    const selections = Object.entries(jobsData).map(([item_code, sel]) => ({
-        item_code,
+    const selections = Object.entries(jobsData).map(([group_key, sel]) => ({
+        item_code: sel.item_code || group_key,
         of_number: sel.of_number,
         op_code:   sel.op_code
     }));
@@ -228,6 +367,8 @@ function confirmerAssignation() {
         selections
     };
 
+    afficherSpinner("Création de la mission...");
+
     fetch("/api/mission/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -235,25 +376,57 @@ function confirmerAssignation() {
     })
     .then(r => r.json())
     .then(data => {
+        cacherSpinner();
         if (data.success) {
             document.getElementById("zone-jobs").classList.add("d-none");
             document.getElementById("zone-succes").classList.remove("d-none");
-            const nb = selections.length;
             document.getElementById("succes-msg").textContent =
-                `${nb} OF(s) assigné(s) au chariot ${currentChariot.chariot_id}. Mission #${data.mission_id} créée.`;
+                `${selections.length} OF(s) assigné(s) au chariot ${currentChariot.chariot_id}. Mission #${data.mission_id} créée.`;
         } else {
             alert("Erreur : " + data.error);
         }
     })
-    .catch(err => alert("Erreur réseau : " + err));
+    .catch(err => {
+        cacherSpinner();
+        alert("Erreur réseau : " + err);
+    });
 }
 
-// ── Status display ─────────────────────────────────────────
+// ── Actualiser (re-sync + reload jobs) ────────────────────────
+function relancerSync() {
+    document.getElementById("zone-jobs").classList.add("d-none");
+    document.getElementById("zone-chariot").classList.remove("d-none");
+    chercherJobs();
+}
+
+// ── Helpers ───────────────────────────────────────────────────
 function setStatus(msg, type) {
     const el = document.getElementById("scan-status");
     if (!el) return;
-    const icons = { info: "bi-camera", success: "bi-check-circle", error: "bi-exclamation-triangle" };
-    const colors = { info: "#374151", success: "#065f46", error: "#991b1b" };
+    const icons  = { info: "bi-camera", success: "bi-check-circle", error: "bi-exclamation-triangle" };
+    const colors = { info: "#374151",   success: "#065f46",          error: "#991b1b" };
     el.innerHTML = `<i class="bi ${icons[type] || 'bi-info-circle'} me-2"></i>${msg}`;
     el.style.color = colors[type] || "#374151";
+}
+
+function afficherSpinner(msg) {
+    document.getElementById("spinner-msg").textContent = msg || "Chargement...";
+    document.getElementById("spinner").classList.add("active");
+}
+
+function cacherSpinner() {
+    document.getElementById("spinner").classList.remove("active");
+}
+
+function resetScan() {
+    currentChariot  = null;
+    currentChariot2 = null;
+    jobsData = {};
+    const zoneActive = document.getElementById("zone-mission-active");
+    if (zoneActive) zoneActive.classList.add("d-none");
+    document.getElementById("zone-chariot").classList.add("d-none");
+    document.getElementById("zone-jobs").classList.add("d-none");
+    document.getElementById("zone-groupe-2").classList.add("d-none");
+    document.getElementById("zone-scan").classList.remove("d-none");
+    demarrerScanner1();
 }

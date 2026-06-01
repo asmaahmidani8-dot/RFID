@@ -3,8 +3,12 @@ app.py — Dashboard Flask Water Spider
 GE Healthcare Buc | Ligne Pristina | RFID
 """
 import os
-from datetime import datetime
+import sys
+import subprocess
+from datetime import datetime, date
+from decimal import Decimal
 from flask import Flask, render_template, request, jsonify, session
+from flask.json.provider import DefaultJSONProvider
 from dotenv import load_dotenv
 import mysql.connector
 
@@ -12,6 +16,24 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 app = Flask(__name__)
 app.secret_key = "rfid_buc_ge_2026"
+
+# ── Encodeur JSON — gère Decimal et date MySQL ────────────────
+class RFIDJsonProvider(DefaultJSONProvider):
+    def default(self, obj):
+        if isinstance(obj, Decimal):
+            return int(obj) if obj == int(obj) else float(obj)
+        if isinstance(obj, (datetime, date)):
+            return obj.strftime("%d/%m/%Y")
+        return super().default(obj)
+
+app.json_provider_class = RFIDJsonProvider
+app.json = RFIDJsonProvider(app)
+
+# ── Gestionnaire erreurs → toujours retourner JSON ───────────
+@app.errorhandler(Exception)
+def handle_error(e):
+    import traceback
+    return jsonify({"error": str(e), "trace": traceback.format_exc()}), 500
 
 # ── MySQL ─────────────────────────────────────────────────────
 def get_db():
@@ -51,7 +73,7 @@ def dashboard():
     cur.execute("SELECT COUNT(*) AS total FROM jobs_planning WHERE statut='RELEASED'")
     total_released = cur.fetchone()["total"]
 
-    cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE actif=1 AND statut!='TERMINE'")
+    cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE actif=1 AND statut!='TERMINEE'")
     total_actives = cur.fetchone()["total"]
 
     cur.execute("SELECT COUNT(*) AS total FROM chariots WHERE actif=1")
@@ -116,6 +138,23 @@ def api_scan():
         db.close()
         return jsonify({"error": f"Chariot {chariot_id} introuvable"}), 404
 
+    # ── Vérifier mission active → bloquer le rescan ───────────
+    cur.execute("""
+        SELECT id, statut FROM cart_missions
+        WHERE chariot_id = %s AND actif = 1 AND statut NOT IN ('TERMINEE')
+        LIMIT 1
+    """, (chariot_id,))
+    mission_active = cur.fetchone()
+    if mission_active:
+        cur.close()
+        db.close()
+        return jsonify({
+            "action": "mission_active",
+            "error": f"Ce chariot est déjà en mission #{mission_active['id']} ({mission_active['statut']}). Terminez la mission avant de rescanner.",
+            "mission_id": mission_active["id"],
+            "statut": mission_active["statut"]
+        }), 409
+
     # ── Type B → groupe ───────────────────────────────────────
     if chariot["type_chariot"] == "B":
         scan1 = session.get("groupe_scan1")
@@ -150,46 +189,76 @@ def api_scan():
             if erreur:
                 return jsonify({"error": erreur, "action": "erreur_groupe"}), 400
 
-            jobs_list = _get_jobs(cur, chariot1_id)
             cur.close()
             db.close()
             return jsonify({
                 "action": "groupe_forme",
                 "chariot1": chariot1,
-                "chariot2": chariot,
-                "jobs": jobs_list
+                "chariot2": chariot
             })
 
     # ── Type A / C / D ────────────────────────────────────────
-    jobs_list = _get_jobs(cur, chariot_id)
     cur.close()
     db.close()
-    return jsonify({"action": "assigner", "chariot": chariot, "jobs": jobs_list})
+    return jsonify({"action": "chariot_identifie", "chariot": chariot})
 
 
 def _get_jobs(cur, chariot_id):
     cur.execute("""
         SELECT DISTINCT
             jp.of_number, jp.item_code, jp.item_desc,
-            jp.operation_code, jp.qty_totale, jp.date_besoin,
-            ci.item_desc AS assembly_name
+            jp.operation_code, jp.qty_totale, jp.date_besoin
         FROM jobs_planning jp
-        JOIN chariot_items ci ON ci.item_code = jp.item_code AND ci.chariot_id = %s
         JOIN chariots c ON c.chariot_id = %s
+        JOIN chariot_items ci ON ci.chariot_id = %s
+                              AND ci.item_code = jp.item_code
         WHERE jp.statut = 'RELEASED'
           AND jp.operation_code = CONCAT('OP', LPAD(c.operation_code, 2, '0'))
-          AND jp.of_number NOT IN (
-              SELECT cmj.job_number FROM cart_mission_jobs cmj
-              JOIN cart_missions cm ON cm.id = cmj.mission_id
-              WHERE cm.chariot_id = %s AND cm.actif=1 AND cm.statut != 'TERMINE'
-          )
         ORDER BY jp.date_besoin ASC, jp.item_code, jp.of_number
-    """, (chariot_id, chariot_id, chariot_id))
+    """, (chariot_id, chariot_id))
     rows = cur.fetchall()
     for r in rows:
         if r.get("date_besoin"):
             r["date_besoin"] = r["date_besoin"].strftime("%d/%m/%Y")
     return rows
+
+
+@app.route("/api/jobs", methods=["POST"])
+def api_jobs():
+    """Sync Oracle puis retourne les OFs compatibles avec le chariot."""
+    data = request.get_json()
+    chariot_id = data.get("chariot_id")
+
+    if not chariot_id:
+        return jsonify({"error": "chariot_id manquant"}), 400
+
+    # ── Sync Oracle (désactivable via ORACLE_SYNC=false dans .env)
+    sync_ok = False
+    if os.getenv("ORACLE_SYNC", "true").lower() == "true":
+        try:
+            sync_script = os.path.join(os.path.dirname(__file__), "sync_oracle.py")
+            env = {**os.environ}
+            ic_path = "/home/ge/instantclient_23_26"
+            if os.path.exists(ic_path):
+                env["LD_LIBRARY_PATH"] = ic_path + ":" + env.get("LD_LIBRARY_PATH", "")
+            result = subprocess.run(
+                [sys.executable, sync_script],
+                timeout=10,
+                env=env,
+                capture_output=True
+            )
+            sync_ok = (result.returncode == 0)
+        except Exception:
+            pass  # Sync échouée → données en cache MySQL
+
+    # ── Requête jobs ──────────────────────────────────────────
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    jobs_list = _get_jobs(cur, chariot_id)
+    cur.close()
+    db.close()
+
+    return jsonify({"jobs": jobs_list, "sync_ok": sync_ok})
 
 
 @app.route("/api/mission/create", methods=["POST"])
@@ -226,9 +295,9 @@ def create_mission():
             for mid in filter(None, [mission1_id, mission2_id]):
                 cur.execute("""
                     INSERT INTO cart_mission_jobs
-                        (item_code, statut, op_code, job_number, mission_id, cree_le)
-                    VALUES (%s, 'ASSIGNE', %s, %s, %s, %s)
-                """, (sel["item_code"], sel["op_code"], sel["of_number"], mid, now))
+                        (of_number, operation_code, item_code, statut, mission_id, cree_le)
+                    VALUES (%s, %s, %s, 'ASSIGNE', %s, %s)
+                """, (sel["of_number"], sel["op_code"], sel["item_code"], mid, now))
 
             cur.execute("""
                 UPDATE jobs_planning SET statut='ASSIGNE'
@@ -255,13 +324,19 @@ def api_stats():
     released = cur.fetchone()["n"]
     cur.execute("SELECT COUNT(*) AS n FROM jobs_planning WHERE statut='ASSIGNE'")
     assigned = cur.fetchone()["n"]
-    cur.execute("SELECT COUNT(*) AS n FROM cart_missions WHERE actif=1 AND statut!='TERMINE'")
+    cur.execute("SELECT COUNT(*) AS n FROM cart_missions WHERE actif=1 AND statut!='TERMINEE'")
     actives = cur.fetchone()["n"]
     cur.close()
     db.close()
     return jsonify({"released": released, "assigned": assigned, "actives": actives})
 
 
-# ══════════════════════════════════════════════════════════════
+# ── Pick-to-Light (désactivé) ─────────────────────────────────
+# from ptl import init_ptl
+# init_ptl(app)
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    cert = os.path.expanduser("~/cert.pem")
+    key  = os.path.expanduser("~/key.pem")
+    ssl_ctx = (cert, key) if os.path.exists(cert) else None
+    app.run(host="0.0.0.0", port=5000, debug=True, ssl_context=ssl_ctx)
