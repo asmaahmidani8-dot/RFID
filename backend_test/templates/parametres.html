@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Paramètres{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+    <div style="background:#475569;border-radius:12px;padding:12px;color:white;font-size:1.4rem;">
+        <i class="bi bi-gear-fill"></i>
+    </div>
+    <div>
+        <div style="font-size:1.2rem;font-weight:700;color:#334155;">Paramètres</div>
+        <div style="color:#64748b;font-size:.85rem;">Configuration & dépannage — sans toucher au code</div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <!-- MENU GAUCHE -->
+    <div class="col-md-3">
+        <div class="card p-2">
+            <button class="param-menu active" data-sec="chariots"><i class="bi bi-cart3 me-2"></i>Chariots</button>
+            <button class="param-menu" data-sec="badges"><i class="bi bi-credit-card-2-front me-2"></i>Badges RFID</button>
+            <button class="param-menu" data-sec="reserve"><i class="bi bi-bullseye me-2"></i>Réserve (tampon)</button>
+            <button class="param-menu" data-sec="depannage"><i class="bi bi-tools me-2"></i>Dépannage</button>
+            <button class="param-menu" data-sec="supervision"><i class="bi bi-heart-pulse me-2"></i>Supervision</button>
+        </div>
+    </div>
+
+    <!-- CONTENU -->
+    <div class="col-md-9">
+        <div id="sec-chariots" class="param-sec"></div>
+        <div id="sec-badges" class="param-sec" style="display:none;"></div>
+        <div id="sec-reserve" class="param-sec" style="display:none;"></div>
+        <div id="sec-depannage" class="param-sec" style="display:none;"></div>
+        <div id="sec-supervision" class="param-sec" style="display:none;"></div>
+    </div>
+</div>
+
+<style>
+    .param-menu { display:block; width:100%; text-align:left; border:none; background:transparent;
+        padding:10px 14px; border-radius:8px; font-weight:600; color:#475569; font-size:.92rem; }
+    .param-menu:hover { background:#f1f5f9; }
+    .param-menu.active { background:#475569; color:white; }
+    .p-badge { font-size:.72rem; font-weight:700; padding:2px 8px; border-radius:6px; }
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Navigation sections ──
+document.querySelectorAll('.param-menu').forEach(b => b.onclick = () => {
+    document.querySelectorAll('.param-menu').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    document.querySelectorAll('.param-sec').forEach(s => s.style.display = 'none');
+    document.getElementById('sec-' + b.dataset.sec).style.display = 'block';
+    charger(b.dataset.sec);
+});
+
+function charger(sec) {
+    if (sec === 'chariots')    chargerChariots();
+    if (sec === 'badges')      chargerBadges();
+    if (sec === 'reserve')     chargerReserve();
+    if (sec === 'depannage')   chargerDepannage();
+    if (sec === 'supervision') chargerSupervision();
+}
+
+function post(url, body) {
+    return fetch(url, {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)}).then(r => r.json());
+}
+
+// ════════════ CHARIOTS ════════════
+function chargerChariots() {
+    Promise.all([
+        fetch('/api/params/chariots').then(r => r.json()),
+        fetch('/api/params/reserve').then(r => r.json())
+    ]).then(([data, res]) => {
+        window._allChariots = data;     // pour la génération auto de l'ID
+        const postes = res.config || [];
+        const ops     = [...new Set(postes.map(p => String(p.operation_code)))].sort();
+        const feeders = [...new Set(postes.filter(p => p.type==='feeder').map(p => String(p.numero)))].sort();
+        const lpostes = [...new Set(postes.filter(p => p.type==='poste').map(p => String(p.numero)))].sort();
+        const opt = (arr, ph) => `<option value="">${ph}</option>` + arr.map(v => `<option>${v}</option>`).join('');
+
+        let rows = data.map(c => {
+            const enMission = c.mission_statut
+                ? `<span class="p-badge" style="background:#dbeafe;color:#1e40af;">${c.mission_statut}</span>`
+                : `<span class="p-badge" style="background:#dcfce7;color:#166534;">libre</span>`;
+            const actif = c.actif
+                ? `<span class="p-badge" style="background:#dcfce7;color:#166534;">actif</span>`
+                : `<span class="p-badge" style="background:#fee2e2;color:#991b1b;">inactif</span>`;
+            const loc = c.feeder_num ? ('Feeder '+c.feeder_num) : (c.poste ? ('Poste '+c.poste) : '—');
+            return `<tr>
+                <td style="font-weight:700;color:#003087;">${c.chariot_id}</td>
+                <td>${c.type_chariot}</td><td>OP${c.operation_code}</td>
+                <td>${loc}</td><td>${c.partie!=null?('P'+c.partie):'—'}</td><td>${c.nb_jobs}</td>
+                <td>${enMission}</td><td>${actif}</td>
+                <td style="white-space:nowrap;">
+                    ${c.mission_statut ? `<button class="btn btn-sm btn-outline-warning" onclick="debloquer('${c.chariot_id}')" title="Sortir de la mission"><i class="bi bi-unlock"></i></button>` : ''}
+                    <button class="btn btn-sm btn-outline-secondary" onclick="toggleChariot('${c.chariot_id}')" title="Activer/désactiver"><i class="bi bi-power"></i></button>
+                </td></tr>`;
+        }).join('');
+        document.getElementById('sec-chariots').innerHTML = `
+        <div class="card mb-3"><div class="card-body">
+            <h6 class="mb-3"><i class="bi bi-plus-circle me-1"></i>Ajouter / modifier un chariot</h6>
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3"><label class="form-label small mb-1">ID chariot</label><input id="ch-id" class="form-control form-control-sm" placeholder="CH_1_FEEDER2"></div>
+                <div class="col-md-3"><label class="form-label small mb-1">Nom</label><input id="ch-nom" class="form-control form-control-sm" placeholder="Nom"></div>
+                <div class="col-md-2"><label class="form-label small mb-1">Type</label><select id="ch-type" class="form-select form-select-sm" onchange="genId()"><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
+                <div class="col-md-2"><label class="form-label small mb-1">Opération</label><select id="ch-op" class="form-select form-select-sm" onchange="genId()">${opt(ops,'— OP —')}</select></div>
+                <div class="col-md-2"><label class="form-label small mb-1">Feeder</label><select id="ch-feeder" class="form-select form-select-sm" onchange="genId()">${opt(feeders,'—')}</select></div>
+                <div class="col-md-2"><label class="form-label small mb-1">Poste</label><select id="ch-poste" class="form-select form-select-sm" onchange="genId()">${opt(lpostes,'—')}</select></div>
+                <div class="col-md-2"><label class="form-label small mb-1">Partie</label><select id="ch-partie" class="form-select form-select-sm" onchange="genId()"><option value="">—</option><option>1</option><option>2</option></select></div>
+                <div class="col-md-2"><label class="form-label small mb-1">Nb jobs</label><input id="ch-nbjobs" type="number" min="1" class="form-control form-control-sm" value="1"></div>
+                <div class="col-md-auto"><button class="btn btn-sm" style="background:#475569;color:white;" onclick="saveChariot()">Enregistrer</button></div>
+            </div>
+            <div class="form-text mt-2">Choisis <strong>Feeder</strong> OU <strong>Poste</strong> (pas les deux). La <strong>Partie</strong> sert aux chariots Type B.</div>
+        </div></div>
+        <div class="card"><div class="card-body p-0">
+            <table class="table table-hover table-sm mb-0">
+                <thead style="background:#f8fafc;"><tr>
+                    <th class="ps-3">CHARIOT</th><th>TYPE</th><th>OP</th><th>EMPLACEMENT</th><th>PARTIE</th><th>JOBS</th><th>ÉTAT</th><th>ACTIF</th><th>ACTIONS</th>
+                </tr></thead><tbody>${rows}</tbody>
+            </table>
+        </div></div>`;
+    });
+}
+function saveChariot() {
+    const g = id => (document.getElementById(id).value || '').trim();
+    if (!g('ch-id'))  { alert('ID chariot requis'); return; }
+    if (!g('ch-op'))  { alert('Choisis une opération'); return; }
+    post('/api/params/chariot/save', {
+        chariot_id:g('ch-id'), nom:g('ch-nom'), type_chariot:g('ch-type'),
+        operation_code:g('ch-op'),
+        feeder_num:g('ch-feeder')||null, poste:g('ch-poste')||null,
+        partie:g('ch-partie')||null, nb_jobs:g('ch-nbjobs')||1
+    }).then(d => d.ok ? chargerChariots() : alert(d.error));
+}
+// ── Génération AUTO du nom = ID : CH01_F2_P1_OP10 ──
+function _pad2(x){ return String(x).padStart(2,'0'); }
+function _nextChNum(){
+    // plus grand numéro CHxx existant + 1 (sinon nb de chariots + 1)
+    let max = 0;
+    (window._allChariots||[]).forEach(c=>{
+        const m = String(c.chariot_id||'').match(/^CH0*([0-9]+)_/i);
+        if (m) max = Math.max(max, parseInt(m[1], 10));
+    });
+    return (max || (window._allChariots||[]).length) + 1;
+}
+function genId(){
+    const g = id => (document.getElementById(id).value || '').trim();
+    const op=g('ch-op'), feeder=g('ch-feeder'), poste=g('ch-poste'), partie=g('ch-partie');
+    if (!op || (!feeder && !poste)) return;     // pas assez d'infos
+    const isFeeder = !!feeder;
+    const numero = isFeeder ? feeder : poste;
+    let name = `CH${_pad2(_nextChNum())}_` + (isFeeder ? `F${numero}` : `POSTE${numero}`);
+    if (partie) name += `_P${partie}`;
+    name += `_OP${op}`;
+    document.getElementById('ch-id').value  = name;   // chariot_id = nom (un seul nom)
+    document.getElementById('ch-nom').value = name;
+}
+
+function toggleChariot(id){ post('/api/params/chariot/toggle',{chariot_id:id}).then(chargerChariots); }
+function debloquer(id){
+    if(!confirm('Débloquer '+id+' ? (sort le chariot de sa mission active)')) return;
+    post('/api/params/chariot/debloquer',{chariot_id:id}).then(d=>{
+        alert(d.missions_liberees+' mission(s) libérée(s)'); chargerChariots();
+    });
+}
+
+// ════════════ BADGES ════════════
+function chargerBadges() {
+    fetch('/api/params/badges').then(r=>r.json()).then(data=>{
+        let rows = data.map(b=>`<tr>
+            <td style="font-family:monospace;">${b.uid}</td>
+            <td style="font-weight:700;color:#003087;">${b.chariot_id||'—'}</td>
+            <td>${b.badge_type}</td>
+            <td>${b.actif?'<span class="p-badge" style="background:#dcfce7;color:#166534;">actif</span>':'<span class="p-badge" style="background:#fee2e2;color:#991b1b;">inactif</span>'}</td>
+            <td><button class="btn btn-sm btn-outline-secondary" onclick="toggleBadge('${b.uid}')"><i class="bi bi-power"></i></button></td>
+        </tr>`).join('');
+        document.getElementById('sec-badges').innerHTML = `
+        <div class="card mb-3"><div class="card-body">
+            <h6 class="mb-3"><i class="bi bi-credit-card-2-front me-1"></i>Associer un badge à un chariot</h6>
+            <div class="row g-2">
+                <div class="col"><input id="bg-uid" class="form-control form-control-sm" placeholder="UID badge"></div>
+                <div class="col"><input id="bg-chariot" class="form-control form-control-sm" placeholder="Chariot ID"></div>
+                <div class="col"><select id="bg-type" class="form-select form-select-sm"><option>START</option><option>END</option></select></div>
+                <div class="col-auto"><button class="btn btn-sm" style="background:#475569;color:white;" onclick="saveBadge()">Associer</button></div>
+            </div>
+        </div></div>
+        <div class="card"><div class="card-body p-0">
+            <table class="table table-hover table-sm mb-0"><thead style="background:#f8fafc;"><tr>
+                <th class="ps-3">UID</th><th>CHARIOT</th><th>TYPE</th><th>ACTIF</th><th>ACTION</th>
+            </tr></thead><tbody>${rows}</tbody></table>
+        </div></div>`;
+    });
+}
+function saveBadge(){
+    const g=id=>document.getElementById(id).value.trim();
+    post('/api/params/badge/save',{uid:g('bg-uid'),chariot_id:g('bg-chariot'),badge_type:g('bg-type')})
+        .then(d=>d.ok?chargerBadges():alert(d.error));
+}
+function toggleBadge(uid){ post('/api/params/badge/toggle',{uid:uid}).then(chargerBadges); }
+
+// ════════════ RÉSERVE (objectif par poste, depuis postes_travail) ════════════
+function chargerReserve() {
+    fetch('/api/params/reserve').then(r=>r.json()).then(res=>{
+        let rows = (res.config||[]).map(o=>{
+            const feeder = (o.type==='feeder') ? o.numero : '—';
+            const poste  = (o.type==='poste')  ? o.numero : '—';
+            return `<tr>
+            <td>${poste}</td>
+            <td>${feeder}</td>
+            <td>OP${o.operation_code}</td>
+            <td>${o.partie!=null ? ('partie '+o.partie) : '—'}</td>
+            <td><input type="number" min="0" id="rs-${o.id}" value="${o.objectif_reserve}" style="width:80px;" class="form-control form-control-sm"></td>
+            <td><button class="btn btn-sm" style="background:#475569;color:white;" onclick="saveReserve(${o.id})">Enregistrer</button></td>
+        </tr>`;}).join('');
+        document.getElementById('sec-reserve').innerHTML = `
+        <div class="alert py-2" style="background:#eff6ff;border:1px solid #bfdbfe;font-size:.82rem;color:#1e40af;">
+            Objectif = nb de chariots à garder prêts. Une ligne = un poste/feeder + OP + partie (pas par chariot).
+        </div>
+        <div class="card"><div class="card-body p-0">
+            <table class="table table-sm mb-0"><thead style="background:#f8fafc;"><tr>
+                <th class="ps-3">POSTE</th><th>FEEDER</th><th>OP</th><th>PARTIE</th><th>OBJECTIF</th><th>ACTION</th>
+            </tr></thead><tbody>${rows||'<tr><td colspan=6 class="text-muted ps-3 py-3">Table postes_travail vide ou absente</td></tr>'}</tbody></table>
+        </div></div>`;
+    });
+}
+function saveReserve(id){
+    const obj = document.getElementById('rs-'+id).value;
+    post('/api/params/reserve/save',{id:id, objectif:obj||3})
+        .then(d=>d.ok?chargerReserve():alert(d.error));
+}
+
+// ════════════ DÉPANNAGE ════════════
+function chargerDepannage() {
+    document.getElementById('sec-depannage').innerHTML = `
+    <div class="card"><div class="card-body">
+        <h6 class="mb-3"><i class="bi bi-tools me-1"></i>Actions de dépannage</h6>
+        <div class="d-grid gap-2" style="max-width:480px;">
+            <button class="btn btn-outline-primary text-start" onclick="retryMoves()">
+                <i class="bi bi-arrow-repeat me-2"></i>Relancer les moves en erreur
+                <div class="small text-muted">Remet les transactions ❌ en file et redémarre le worker</div>
+            </button>
+            <button class="btn btn-outline-secondary text-start" onclick="chargerSupervision();document.querySelector('[data-sec=supervision]').click()">
+                <i class="bi bi-heart-pulse me-2"></i>Voir l'état du système
+            </button>
+        </div>
+    </div></div>`;
+}
+function retryMoves(){
+    post('/api/params/moves/retry',{}).then(d=>alert(d.relancees+' move(s) relancée(s)'));
+}
+
+// ════════════ SUPERVISION ════════════
+function chargerSupervision() {
+    fetch('/api/params/sante').then(r=>r.json()).then(d=>{
+        const card = (label,val,color)=>`<div class="col-6 col-md-4"><div class="card text-center p-3">
+            <div style="font-size:1.8rem;font-weight:800;color:${color};">${val}</div>
+            <div style="font-size:.75rem;color:#64748b;">${label}</div></div></div>`;
+        const worker = d.worker_actif===true?'<span class="p-badge" style="background:#dcfce7;color:#166534;">EN MARCHE</span>'
+            : d.worker_actif===false?'<span class="p-badge" style="background:#fee2e2;color:#991b1b;">ARRÊTÉ</span>':'?';
+        document.getElementById('sec-supervision').innerHTML = `
+        <div class="row g-2 mb-3">
+            ${card('Chariots actifs',d.chariots_actifs,'#003087')}
+            ${card('Missions actives',d.missions_actives,'#6022A6')}
+            ${card('Badges actifs',d.badges_actifs,'#0891b2')}
+            ${card('File : en attente',d.file_attente,'#fd7e14')}
+            ${card('File : en cours',d.file_encours,'#0d6efd')}
+            ${card('File : erreurs',d.file_erreur,'#dc3545')}
+        </div>
+        <div class="card"><div class="card-body d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-robot me-2"></i>Worker MSCA (oracle_msca.py)</span> ${worker}
+        </div></div>`;
+    });
+}
+
+// chargement initial
+chargerChariots();
+</script>
+{% endblock %}

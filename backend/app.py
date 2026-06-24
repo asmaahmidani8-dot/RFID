@@ -52,46 +52,170 @@ def get_db():
 # ══════════════════════════════════════════════════════════════
 
 @app.route("/")
-def dashboard():
+def accueil():
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("SELECT COUNT(*) AS total FROM jobs_planning WHERE statut='RELEASED'")
+    total_released = cur.fetchone()["total"]
+    cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE actif=1 AND statut!='TERMINEE'")
+    total_actives = cur.fetchone()["total"]
+    try:
+        cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE msca_status='EN_ATTENTE'")
+        total_msca_pending = cur.fetchone()["total"]
+    except Exception:
+        total_msca_pending = 0
+    cur.close(); db.close()
+    return render_template("accueil.html",
+                           total_released=total_released,
+                           total_actives=total_actives,
+                           total_msca_pending=total_msca_pending)
+
+
+@app.route("/ws")
+def water_spider():
+    session.pop("groupe_scan1", None)
+    session.pop("depart_scan1", None)
+    return render_template("scan.html")
+
+
+@app.route("/transactions")
+def transactions():
     db = get_db()
     cur = db.cursor(dictionary=True)
 
     cur.execute("""
-        SELECT cm.id, cm.statut, cm.ts_preparee,
-               c.chariot_id, c.nom, c.type_chariot, c.operation_code,
-               COUNT(cmj.id) AS nb_jobs
+        SELECT
+            cm.id, cm.statut, cm.ts_preparee, cm.ts_en_attente, cm.ts_terminee,
+            COALESCE(cm.msca_status, 'EN_ATTENTE') AS msca_status,
+            c.chariot_id, c.nom AS chariot_nom,
+            cmj.of_number, cmj.item_code, cmj.operation_code,
+            jp.item_desc,
+            TIMESTAMPDIFF(MINUTE, cm.ts_en_attente, cm.ts_terminee) AS duree_min
         FROM cart_missions cm
         JOIN chariots c ON c.chariot_id = cm.chariot_id
         LEFT JOIN cart_mission_jobs cmj ON cmj.mission_id = cm.id
-        WHERE cm.actif = 1
-        GROUP BY cm.id
+        LEFT JOIN jobs_planning jp ON jp.of_number = cmj.of_number
+                                  AND jp.operation_code = cmj.operation_code
         ORDER BY cm.ts_preparee DESC
-        LIMIT 20
+        LIMIT 100
     """)
-    missions = cur.fetchall()
+    transactions = cur.fetchall()
 
-    cur.execute("SELECT COUNT(*) AS total FROM jobs_planning WHERE statut='RELEASED'")
-    total_released = cur.fetchone()["total"]
+    # Calcul next_op pour chaque transaction
+    op_sequence = [10,11,13,14,15,16,17,18,20,25,30,70,80,90]
+    for t in transactions:
+        op = t.get("operation_code")
+        # operation_code peut être 'OP10' ou '10' → extraire le numéro
+        op_num = None
+        if op:
+            op_str = str(op).upper().replace("OP", "")
+            if op_str.isdigit():
+                op_num = int(op_str)
+        if op_num is not None and op_num in op_sequence:
+            idx = op_sequence.index(op_num)
+            t["next_op"] = op_sequence[idx+1] if idx+1 < len(op_sequence) else None
+        else:
+            t["next_op"] = None
 
-    cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE actif=1 AND statut!='TERMINEE'")
-    total_actives = cur.fetchone()["total"]
+    cur.execute("SELECT COUNT(*) AS total FROM cart_missions")
+    total = cur.fetchone()["total"]
+    cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE statut='EN_ATTENTE'")
+    en_attente = cur.fetchone()["total"]
+    cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE statut='TERMINEE'")
+    terminees = cur.fetchone()["total"]
+    try:
+        cur.execute("SELECT COUNT(*) AS total FROM cart_missions WHERE COALESCE(msca_status,'EN_ATTENTE')='EN_ATTENTE'")
+        msca_pending = cur.fetchone()["total"]
+    except Exception:
+        msca_pending = 0
 
-    cur.execute("SELECT COUNT(*) AS total FROM chariots WHERE actif=1")
-    total_chariots = cur.fetchone()["total"]
+    cur.close(); db.close()
+    return render_template("transactions.html",
+                           transactions=transactions,
+                           stats={"total": total, "en_attente": en_attente,
+                                  "terminees": terminees, "msca_pending": msca_pending})
 
-    cur.close()
-    db.close()
 
-    return render_template("dashboard.html",
-                           missions=missions,
-                           total_released=total_released,
-                           total_actives=total_actives,
-                           total_chariots=total_chariots)
+@app.route("/operateur")
+def operateur():
+    # Hardcodé pour la phase de développement
+    # À enrichir quand tous les chariots seront ajoutés
+    feeders = [
+        {"feeder_num": 1, "operation_code": "10"},
+        {"feeder_num": 2, "operation_code": "10"},
+        {"feeder_num": 3, "operation_code": "10"},
+        {"feeder_num": 4, "operation_code": "10"},
+        {"feeder_num": 5, "operation_code": "11"},
+        {"feeder_num": 6, "operation_code": "11"},
+    ]
+    postes = [
+        {"poste": "1", "operation_code": "13"},
+        {"poste": "2", "operation_code": "14"},
+        {"poste": "3", "operation_code": "15"},
+        {"poste": "6", "operation_code": "17"},
+    ]
+    return render_template("operateur.html", feeders=feeders, postes=postes)
+
+
+@app.route("/api/operateur/chariots")
+def api_operateur_chariots():
+    type_ = request.args.get("type")  # feeder ou poste
+    val   = request.args.get("val")
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+
+    if type_ == "feeder":
+        condition = "c.feeder_num = %s"
+    else:
+        condition = "c.poste = %s"
+
+    cur.execute(f"""
+        SELECT cm.id AS mission_id, cm.statut, cm.ts_en_attente,
+               c.chariot_id, c.operation_code, c.feeder_num, c.poste,
+               cmj.of_number, cmj.item_code,
+               jp.item_desc, jp.qty_totale
+        FROM cart_missions cm
+        JOIN chariots c ON c.chariot_id = cm.chariot_id
+        LEFT JOIN cart_mission_jobs cmj ON cmj.mission_id = cm.id
+        LEFT JOIN jobs_planning jp ON jp.of_number = cmj.of_number
+                                  AND jp.operation_code = cmj.operation_code
+        WHERE cm.statut = 'EN_ATTENTE'
+          AND cm.actif = 1
+          AND {condition}
+        ORDER BY cm.ts_en_attente ASC
+    """, (val,))
+    results = cur.fetchall()
+    cur.close(); db.close()
+    return jsonify(results)
+
+
+@app.route("/api/operateur/vide", methods=["POST"])
+def api_operateur_vide():
+    data       = request.get_json()
+    mission_id = data.get("mission_id")
+    if not mission_id:
+        return jsonify({"ok": False, "error": "mission_id manquant"}), 400
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    # Récupérer le chariot_id de cette mission
+    cur.execute("SELECT chariot_id FROM cart_missions WHERE id=%s", (mission_id,))
+    mission = cur.fetchone()
+    if mission:
+        # Mission → statut VIDE + chariot.is_vide = 1
+        cur.execute("""
+            UPDATE cart_missions SET statut='VIDE' WHERE id=%s
+        """, (mission_id,))
+        cur.execute("UPDATE chariots SET is_vide=1 WHERE chariot_id=%s",
+                    (mission["chariot_id"],))
+    db.commit()
+    cur.close(); db.close()
+    return jsonify({"ok": True})
 
 
 @app.route("/scan")
 def scan():
     session.pop("groupe_scan1", None)
+    session.pop("depart_scan1", None)
     return render_template("scan.html")
 
 
@@ -111,6 +235,69 @@ def jobs():
     cur.close()
     db.close()
     return render_template("jobs.html", jobs=jobs_list)
+
+
+# ══════════════════════════════════════════════════════════════
+# API WATER SPIDER
+# ══════════════════════════════════════════════════════════════
+
+@app.route("/api/ws/search")
+def ws_search():
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT id, of_number, item_code, item_desc, operation_code,
+               qty_totale, date_besoin
+        FROM jobs_planning
+        WHERE statut='RELEASED'
+          AND (of_number LIKE %s OR item_code LIKE %s OR item_desc LIKE %s)
+        ORDER BY date_besoin ASC
+        LIMIT 20
+    """, (f"%{q}%", f"%{q}%", f"%{q}%"))
+    results = cur.fetchall()
+    cur.close(); db.close()
+    return jsonify(results)
+
+
+@app.route("/api/ws/associer", methods=["POST"])
+def ws_associer():
+    data = request.get_json()
+    chariot_id     = data.get("chariot_id", "").strip()
+    of_number      = data.get("of_number", "").strip()
+    operation_code = data.get("operation_code")
+
+    if not chariot_id or not of_number:
+        return jsonify({"ok": False, "error": "chariot_id et of_number requis"}), 400
+
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+
+    # Récupérer le job_id
+    cur.execute("SELECT id FROM jobs_planning WHERE of_number=%s AND operation_code=%s LIMIT 1",
+                (of_number, operation_code))
+    job = cur.fetchone()
+    job_id = job["id"] if job else None
+
+    # Créer ou mettre à jour la mission
+    cur.execute("""
+        INSERT INTO cart_missions (chariot_id, statut, actif, ts_preparee, msca_status)
+        VALUES (%s, 'PREPAREE', 1, NOW(), 'EN_ATTENTE')
+    """, (chariot_id,))
+    mission_id = cur.lastrowid
+
+    # Associer le job à la mission
+    if job_id:
+        cur.execute("""
+            INSERT IGNORE INTO cart_mission_jobs (mission_id, job_id)
+            VALUES (%s, %s)
+        """, (mission_id, job_id))
+
+    db.commit()
+    cur.close(); db.close()
+    return jsonify({"ok": True, "mission_id": mission_id})
 
 
 # ══════════════════════════════════════════════════════════════
@@ -301,8 +488,8 @@ def create_mission():
 
             cur.execute("""
                 UPDATE jobs_planning SET statut='ASSIGNE'
-                WHERE of_number=%s AND item_code=%s
-            """, (sel["of_number"], sel["item_code"]))
+                WHERE of_number=%s AND operation_code=%s
+            """, (sel["of_number"], sel["op_code"]))
 
         db.commit()
         cur.close()
@@ -329,6 +516,41 @@ def api_stats():
     cur.close()
     db.close()
     return jsonify({"released": released, "assigned": assigned, "actives": actives})
+
+
+@app.route("/chariots-vides")
+def chariots_vides():
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT cm.id AS mission_id, c.chariot_id, c.nom,
+               c.type_chariot, c.operation_code, c.feeder_num, c.poste,
+               cm.ts_en_attente
+        FROM cart_missions cm
+        JOIN chariots c ON c.chariot_id = cm.chariot_id
+        WHERE cm.statut = 'VIDE' AND cm.actif = 1
+        ORDER BY cm.ts_en_attente ASC
+    """)
+    chariots_list = cur.fetchall()
+    cur.close(); db.close()
+    return render_template("chariots_vides.html", chariots=chariots_list)
+
+
+@app.route("/api/chariots-vides")
+def api_chariots_vides():
+    db = get_db()
+    cur = db.cursor(dictionary=True)
+    cur.execute("""
+        SELECT cm.id AS mission_id, c.chariot_id, c.nom,
+               c.type_chariot, c.operation_code, c.feeder_num, c.poste
+        FROM cart_missions cm
+        JOIN chariots c ON c.chariot_id = cm.chariot_id
+        WHERE cm.statut = 'VIDE' AND cm.actif = 1
+        ORDER BY cm.ts_en_attente ASC
+    """)
+    chariots = cur.fetchall()
+    cur.close(); db.close()
+    return jsonify(chariots)
 
 
 # ── Pick-to-Light (désactivé) ─────────────────────────────────

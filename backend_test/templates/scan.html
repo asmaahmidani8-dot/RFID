@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Scanner{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3">
+
+    <!-- ÉTAPE 1 : SCAN QR ───────────────────────────────── -->
+    <div id="zone-scan">
+        <div class="scan-header mb-3">
+            <h5 class="mb-1"><i class="bi bi-qr-code-scan me-2"></i>Scanner le chariot</h5>
+            <p class="text-muted small mb-0">Pointez la caméra vers le QR code du chariot</p>
+        </div>
+        <div class="qr-reader-container mb-3">
+            <div id="qr-reader"></div>
+        </div>
+        <div id="scan-status" class="scan-status-box">
+            <i class="bi bi-camera me-2"></i>Caméra en attente...
+        </div>
+    </div>
+
+    <!-- ÉTAPE 1b : ATTENTE 2ÈME SCAN (groupe Type B) ────── -->
+    <div id="zone-groupe-2" class="d-none">
+        <div class="alert-groupe">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            <strong id="msg-scan1"></strong>
+        </div>
+        <div class="scan-header mb-3">
+            <h5 class="mb-1"><i class="bi bi-qr-code-scan me-2"></i>Scanner le 2ème chariot</h5>
+            <p class="text-muted small mb-0">Scannez le chariot partenaire du groupe</p>
+        </div>
+        <div class="qr-reader-container mb-3">
+            <div id="qr-reader-2"></div>
+        </div>
+    </div>
+
+    <!-- ÉTAPE 2 : CHARIOT IDENTIFIÉ → CHERCHER JOBS ────── -->
+    <div id="zone-chariot" class="d-none">
+        <div id="chariot-info-card" class="chariot-info-card mb-3"></div>
+
+        <button id="btn-chercher" class="btn-chercher" onclick="chercherJobs()">
+            <i class="bi bi-search me-2" style="font-size:1.1rem"></i>
+            CHERCHER LES JOBS DISPONIBLES
+        </button>
+    </div>
+
+    <!-- ÉTAPE 3 : SÉLECTION OFs ────────────────────────── -->
+    <div id="zone-jobs" class="d-none">
+        <div id="chariot-info-card-2" class="chariot-info-card mb-3"></div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3 mt-2">
+            <h6 class="section-title mb-0">
+                <i class="bi bi-list-check me-2"></i>Choisir les OFs
+            </h6>
+            <button class="btn btn-sm btn-outline-secondary" onclick="relancerSync()">
+                <i class="bi bi-arrow-clockwise me-1"></i>Actualiser
+            </button>
+        </div>
+
+        <div id="jobs-container"></div>
+        <div id="assign-error" class="alert alert-warning d-none mt-3" role="alert"></div>
+
+        <button id="btn-assigner" class="btn-assign-main" onclick="confirmerAssignation()">
+            <i class="bi bi-check-circle me-2"></i>ASSIGNER LES OFs SÉLECTIONNÉS
+        </button>
+    </div>
+
+    <!-- ÉTAPE 4 : SUCCÈS ───────────────────────────────── -->
+    <div id="zone-succes" class="d-none">
+        <div class="succes-card">
+            <div class="succes-icon mb-3">✅</div>
+            <h4 style="color:#0d7a52">Mission créée !</h4>
+            <p id="succes-msg" class="text-muted"></p>
+            <a href="/" class="btn btn-ge-primary me-2">Dashboard</a>
+            <a href="/scan" class="btn btn-outline-secondary">Nouveau scan</a>
+        </div>
+    </div>
+
+</div>
+
+<!-- SPINNER Oracle ──────────────────────────────────────── -->
+<div class="spinner-overlay" id="spinner">
+    <div class="spinner-border text-light" style="width:3rem;height:3rem"></div>
+    <span id="spinner-msg">Sync Oracle en cours...</span>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/static/js/scan.js?v=20260625_typeb_choix"></script>
+{% endblock %}

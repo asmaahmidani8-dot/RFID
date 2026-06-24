@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+{% block title %}Poste Opérateur{% endblock %}
+
+{% block content %}
+<style>
+    .straxi-content { background: #f0f4f8; }
+
+    .poste-btn {
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        background: white; border-radius: 16px;
+        padding: 28px 16px; text-decoration: none;
+        box-shadow: 0 2px 10px rgba(0,0,0,.07);
+        border: 2px solid transparent;
+        transition: all .2s; cursor: pointer;
+        min-height: 120px;
+    }
+    .poste-btn:hover { border-color: #6022A6; transform: translateY(-2px);
+                       box-shadow: 0 6px 20px rgba(96,34,166,.15); }
+    .poste-btn .icon { font-size: 2rem; margin-bottom: 8px; }
+    .poste-btn .label { font-weight: 700; font-size: 1rem; color: #1e293b; }
+    .poste-btn .sub { font-size: .75rem; color: #94a3b8; margin-top: 2px; }
+    .poste-btn.feeder { border-top: 4px solid #176782; }
+    .poste-btn.poste  { border-top: 4px solid #6022A6; }
+
+    /* LISTE CHARIOTS */
+    .chariot-card {
+        background: white; border-radius: 14px;
+        padding: 18px; margin-bottom: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,.06);
+        border-left: 5px solid #fbbf24;
+        cursor: pointer; transition: all .2s;
+    }
+    .chariot-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.12); transform: translateX(3px); }
+    .chariot-card .chariot-id { font-size: 1.1rem; font-weight: 800; color: #003087; }
+    .chariot-card .of-num { font-size: .9rem; color: #6022A6; font-weight: 600; margin-top: 4px; }
+    .chariot-card .item-info { font-size: .8rem; color: #64748b; margin-top: 2px; }
+    .chariot-card .op-badge {
+        background: #e0f2fe; color: #0369a1;
+        border-radius: 6px; padding: 2px 10px;
+        font-size: .78rem; font-weight: 700;
+    }
+
+    /* ÉTIQUETTE DIGITALE */
+    .etiquette {
+        background: white; border-radius: 16px;
+        padding: 0; overflow: hidden;
+        box-shadow: 0 4px 20px rgba(0,0,0,.1);
+        max-width: 500px; margin: 0 auto;
+    }
+    .etiq-header {
+        background: #003087; color: white;
+        padding: 14px 20px;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+    .etiq-header .org { font-size: .8rem; opacity: .75; }
+    .etiq-header .line { font-size: 1rem; font-weight: 700; }
+    .etiq-row {
+        display: flex; justify-content: space-between;
+        padding: 10px 20px; border-bottom: 1px solid #f1f5f9;
+    }
+    .etiq-row .key { font-size: .75rem; color: #94a3b8; font-weight: 600; text-transform: uppercase; }
+    .etiq-row .val { font-size: .95rem; font-weight: 700; color: #1e293b; }
+    .etiq-of {
+        display: flex; align-items: center; gap: 20px;
+        padding: 16px 20px; border-bottom: 1px solid #f1f5f9;
+    }
+    .etiq-of .of-big { font-size: 1.6rem; font-weight: 900; color: #003087; }
+    .etiq-qr { text-align: center; }
+    .etiq-qty {
+        display: flex; gap: 0;
+    }
+    .etiq-qty > div {
+        flex: 1; padding: 14px; text-align: center;
+        border-right: 1px solid #f1f5f9;
+    }
+    .etiq-qty > div:last-child { border-right: none; }
+    .etiq-qty .q-val { font-size: 1.8rem; font-weight: 900; color: #003087; }
+    .etiq-qty .q-label { font-size: .72rem; color: #94a3b8; margin-top: 2px; }
+
+    .btn-vide {
+        display: block; width: 100%;
+        background: linear-gradient(135deg, #198754, #20c997);
+        color: white; font-size: 1.1rem; font-weight: 700;
+        padding: 18px; border: none; cursor: pointer;
+        letter-spacing: 1px;
+    }
+    .btn-vide:hover { background: linear-gradient(135deg, #157347, #198754); }
+</style>
+
+<!-- SÉLECTION POSTE -->
+<div id="section-postes">
+    <div class="d-flex align-items-center gap-3 mb-4">
+        <div style="background:#6022A6;border-radius:12px;padding:12px;color:white;font-size:1.4rem;">
+            <i class="bi bi-person-gear"></i>
+        </div>
+        <div>
+            <div style="font-size:1.1rem;font-weight:700;color:#6022A6;">Poste Opérateur</div>
+            <div style="font-size:.82rem;color:#64748b;">Sélectionne ton poste</div>
+        </div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-12" style="font-size:.78rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:1px;">
+            FEEDERS
+        </div>
+        {% for f in feeders %}
+        <div class="col-6">
+            <div class="poste-btn feeder" onclick="chargerPoste('feeder', {{ f.feeder_num }})">
+                <div class="icon">🏭</div>
+                <div class="label">Feeder {{ f.feeder_num }}</div>
+                <div class="sub">OP{{ f.operation_code }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="row g-3">
+        <div class="col-12" style="font-size:.78rem;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:1px;">
+            POSTES DE TRAVAIL
+        </div>
+        {% for p in postes %}
+        <div class="col-6">
+            <div class="poste-btn poste" onclick="chargerPoste('poste', '{{ p.poste }}')">
+                <div class="icon">🔧</div>
+                <div class="label">Poste {{ p.poste }}</div>
+                <div class="sub">OP{{ p.operation_code }}</div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- LISTE CHARIOTS -->
+<div id="section-chariots" style="display:none;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+            <div style="font-size:1.1rem;font-weight:700;color:#6022A6;" id="titre-poste">—</div>
+            <div style="font-size:.82rem;color:#64748b;">Chariots en attente</div>
+        </div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="retourPostes()">
+            <i class="bi bi-arrow-left"></i> Retour
+        </button>
+    </div>
+    <div id="liste-chariots"></div>
+</div>
+
+<!-- ÉTIQUETTE DIGITALE -->
+<div id="section-etiquette" style="display:none;">
+    <div class="d-flex align-items-center justify-content-between mb-4">
+        <div style="font-size:1.1rem;font-weight:700;color:#6022A6;">Détail Chariot</div>
+        <button class="btn btn-sm btn-outline-secondary" onclick="retourChariots()">
+            <i class="bi bi-arrow-left"></i> Retour
+        </button>
+    </div>
+    <div id="etiquette-content"></div>
+</div>
+
+<!-- CONFIRMATION VIDE -->
+<div id="section-confirmation" style="display:none;" class="text-center py-5">
+    <div style="font-size:4rem;color:#198754;"><i class="bi bi-check-circle-fill"></i></div>
+    <div style="font-size:1.3rem;font-weight:700;margin-top:16px;color:#1e293b;">Chariot marqué VIDE !</div>
+    <div style="color:#64748b;margin-top:8px;">
+        En attente du scan badge par le Water Spider<br>
+        <small style="color:#fbbf24;">⏳ Mission se terminera quand WS scannera le badge</small>
+    </div>
+    <button class="btn mt-4" style="background:#6022A6;color:white;" onclick="retourPostes()">
+        <i class="bi bi-house me-2"></i>Retour postes
+    </button>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script>
+let currentPosteType = null;
+let currentPosteVal  = null;
+
+function chargerPoste(type, val) {
+    currentPosteType = type;
+    currentPosteVal  = val;
+    document.getElementById('section-postes').style.display   = 'none';
+    document.getElementById('section-chariots').style.display = 'block';
+    document.getElementById('titre-poste').textContent =
+        type === 'feeder' ? `Feeder ${val}` : `Poste ${val}`;
+
+    fetch(`/api/operateur/chariots?type=${type}&val=${val}`)
+        .then(r => r.json())
+        .then(data => {
+            const div = document.getElementById('liste-chariots');
+            if (!data.length) {
+                div.innerHTML = `<div class="text-center py-5 text-muted">
+                    <i class="bi bi-inbox" style="font-size:3rem;"></i>
+                    <p class="mt-3">Aucun chariot en attente</p></div>`;
+                return;
+            }
+            // Stocker les données dans une variable globale accessible par index
+            window._chariots = data;
+            div.innerHTML = data.map((c, idx) => `
+                <div class="chariot-card" onclick="afficherEtiquette(${idx})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <div class="chariot-id"><i class="bi bi-cart3 me-1"></i>${c.chariot_id}</div>
+                            <div class="of-num">${c.of_number || '—'}</div>
+                            <div class="item-info">${c.item_code || ''} — ${(c.item_desc||'').substring(0,40)}</div>
+                        </div>
+                        <span class="op-badge">OP${c.operation_code}</span>
+                    </div>
+                </div>`).join('');
+        });
+}
+
+function afficherEtiquette(idx) {
+    const c = window._chariots[idx];
+    console.log('[ETIQUETTE] chariot=', c.chariot_id, '| mission_id=', c.mission_id);
+    document.getElementById('section-chariots').style.display   = 'none';
+    document.getElementById('section-etiquette').style.display  = 'block';
+
+    const html = `
+    <div class="etiquette">
+        <div class="etiq-header">
+            <div>
+                <div class="org">Org : BUC</div>
+                <div class="line">PRISTINA ${c.item_code || ''}</div>
+            </div>
+            <div style="font-size:.75rem;opacity:.7;">${new Date().toLocaleDateString('fr-FR')}</div>
+        </div>
+
+        <div class="etiq-row">
+            <span class="key">Item</span>
+            <span class="val">${c.item_code || '—'}</span>
+        </div>
+        <div class="etiq-row">
+            <span class="key">Description</span>
+            <span class="val">${c.item_desc || '—'}</span>
+        </div>
+        <div class="etiq-row">
+            <span class="key">Opération</span>
+            <span class="val">OP${c.operation_code}</span>
+        </div>
+
+        <div class="etiq-of">
+            <div class="flex-grow-1">
+                <div style="font-size:.72rem;color:#94a3b8;font-weight:600;">NUMÉRO OF</div>
+                <div class="of-big">${c.of_number || '—'}</div>
+            </div>
+            <div class="etiq-qr">
+                <canvas id="qr-canvas"></canvas>
+                <div style="font-size:.68rem;color:#94a3b8;margin-top:4px;">QR Code</div>
+            </div>
+        </div>
+
+        <div class="etiq-qty">
+            <div>
+                <div class="q-val">${c.qty_totale || 1}</div>
+                <div class="q-label">Qty prévue</div>
+            </div>
+            <div>
+                <div class="q-val" style="color:#198754;">${c.qty_totale || 1}</div>
+                <div class="q-label">Qty dispo</div>
+            </div>
+        </div>
+
+        <button class="btn-vide" onclick="marquerVide(${c.mission_id})">
+            ✅ MARQUER VIDE — CHARIOT UTILISÉ
+        </button>
+    </div>`;
+
+    document.getElementById('etiquette-content').innerHTML = html;
+
+    // Générer QR Code
+    setTimeout(() => {
+        QRCode.toCanvas(document.getElementById('qr-canvas'),
+            c.of_number || 'N/A', { width: 80, margin: 1 });
+    }, 100);
+}
+
+function marquerVide(missionId) {
+    console.log('[VIDE] mission_id =', missionId);
+
+    if (!missionId) {
+        alert('Erreur : mission_id manquant ! Recharge la page.');
+        return;
+    }
+
+    fetch('/api/operateur/vide', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({mission_id: missionId})
+    })
+    .then(r => {
+        console.log('[VIDE] status HTTP =', r.status);
+        return r.json();
+    })
+    .then(d => {
+        console.log('[VIDE] réponse =', d);
+        if (d.ok) {
+            document.getElementById('section-etiquette').style.display     = 'none';
+            document.getElementById('section-confirmation').style.display  = 'block';
+        } else {
+            alert('Erreur serveur : ' + (d.error || 'inconnue'));
+        }
+    })
+    .catch(e => {
+        console.error('[VIDE] Erreur fetch :', e);
+        alert('Erreur réseau : ' + e.message);
+    });
+}
+
+function retourPostes() {
+    document.getElementById('section-postes').style.display       = 'block';
+    document.getElementById('section-chariots').style.display     = 'none';
+    document.getElementById('section-etiquette').style.display    = 'none';
+    document.getElementById('section-confirmation').style.display = 'none';
+}
+function retourChariots() {
+    chargerPoste(currentPosteType, currentPosteVal);
+    document.getElementById('section-etiquette').style.display = 'none';
+}
+</script>
+{% endblock %}

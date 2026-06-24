@@ -1,0 +1,27 @@
+# Secrets — JAMAIS sur Git
+.env
+*.env
+
+# Certificats
+cert.pem
+key.pem
+
+# Logs
+*.log
+worker.log
+web.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+
+# Dumps base
+*.sql
+
+# OS / éditeur
+.DS_Store
+Thumbs.db
+.vscode/

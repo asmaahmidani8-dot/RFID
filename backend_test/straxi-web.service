@@ -1,0 +1,17 @@
+[Unit]
+Description=STRAXI - App web test (Flask port 5001)
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ge
+WorkingDirectory=/home/ge/backend_test
+ExecStart=/usr/bin/python3 /home/ge/backend_test/app.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/ge/backend_test/web.log
+StandardError=append:/home/ge/backend_test/web.log
+
+[Install]
+WantedBy=multi-user.target

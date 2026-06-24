@@ -1,0 +1,11 @@
+# STRAXI — dépendances Python (Pi ET PC usine)
+# Installer : pip install -r requirements.txt
+
+Flask>=3.0
+mysql-connector-python>=8.0
+python-dotenv>=1.0
+oracledb>=2.0            # connexion Oracle DB (lecture OFs, routing, série)
+paho-mqtt>=1.6          # broker MQTT (scans badge RFID)
+qrcode>=7.4             # génération QR côté serveur (/api/qr)
+pillow>=10.0            # images (dépendance de qrcode)
+python-barcode>=0.15    # codes-barres Code 128 (/api/barcode)

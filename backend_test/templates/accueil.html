@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Accueil{% endblock %}
+
+{% block content %}
+<style>
+    body { background: #000 !important; }
+    .straxi-content { padding: 0 !important; }
+
+    .hero-full {
+        position: relative;
+        height: calc(100vh - 88px);
+        background: url('/static/images/factory.jpg') center center / cover no-repeat;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+    }
+
+    /* Léger assombrissement global */
+    .hero-full::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(0,0,0,0.18);
+        pointer-events: none;
+    }
+
+    .hero-center {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+    }
+
+    /* Logo en haut */
+    .ge-logo-top {
+        position: absolute;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 3;
+        background: rgba(255,255,255,0.93);
+        border-radius: 10px;
+        padding: 8px 18px;
+        box-shadow: 0 4px 20px rgba(0,0,0,.35);
+        height: 52px;
+    }
+
+    /* Bloc texte UNE LIGNE — fond couleur GE navy */
+    .hero-center {
+        background: rgba(0, 0, 95, 0.68);   /* GE Deep Navy #00005F */
+        backdrop-filter: blur(4px);
+        border-radius: 16px;
+        padding: 28px 60px;
+        text-align: center;
+        border-top: 3px solid #45B2C5;       /* accent teal GE */
+        display: inline-block;
+    }
+    .hero-oneline {
+        font-size: clamp(2rem, 6vw, 4.5rem);
+        font-weight: 900;
+        color: white;
+        letter-spacing: 6px;
+        line-height: 1;
+        white-space: nowrap;
+    }
+    .hero-oneline .sep {
+        color: #45B2C5;
+        font-weight: 300;
+        margin: 0 16px;
+    }
+    .hero-oneline .xi { color: #45B2C5; }
+</style>
+
+<div class="hero-full">
+    <!-- Texte UNE LIGNE au centre -->
+    <div class="hero-center">
+        <div class="hero-oneline">
+            WELCOME TO BUC
+            <span class="sep">·</span>
+            STRA<span class="xi">XI</span>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

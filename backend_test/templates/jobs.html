@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}OFs Released{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h6 class="section-title mb-0">
+            <i class="bi bi-list-task me-2"></i>OFs Released — Org BUC
+        </h6>
+        <span class="badge bg-primary">{{ jobs | length }} OFs</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table table-sm ge-table">
+            <thead>
+                <tr>
+                    <th>N° OF</th>
+                    <th>Item</th>
+                    <th>OP</th>
+                    <th>QF</th>
+                    <th>QT</th>
+                    <th>Date besoin</th>
+                    <th>Statut</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for j in jobs %}
+                <tr>
+                    <td class="fw-semibold">{{ j.of_number }}</td>
+                    <td><span class="item-code">{{ j.item_code }}</span></td>
+                    <td><span class="op-badge">{{ j.operation_code }}</span></td>
+                    <td>{{ j.qty_faite | int }}</td>
+                    <td>{{ j.qty_totale | int }}</td>
+                    <td>
+                        {% if j.date_besoin %}
+                            {{ j.date_besoin.strftime('%d/%m/%Y') }}
+                        {% else %}—{% endif %}
+                    </td>
+                    <td>
+                        <span class="statut-badge statut-{{ j.statut | lower }}">
+                            {{ j.statut }}
+                        </span>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

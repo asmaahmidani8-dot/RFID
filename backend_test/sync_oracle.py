@@ -244,6 +244,119 @@ def synchroniser(conn_oracle, conn_mysql):
 
 
 # ══════════════════════════════════════════════════════════════
+# ROUTING D'OFs PRÉCIS — appelé à l'ASSIGNATION (par app.py)
+# ══════════════════════════════════════════════════════════════
+def fetch_routing_for_of(of_numbers, password=None):
+    """Au moment où le WS assigne un job à un chariot : récupère le routing
+    complet (séquence des ops) de ce/ces OF et le stocke dans job_routing.
+    Sert à connaître l'ORDRE des moves. Retourne le nb de lignes écrites."""
+    if not of_numbers:
+        return 0
+    pwd = password or ORACLE_PASS
+    if not pwd:
+        print("[WARN] fetch_routing_for_of : pas de mot de passe Oracle (.env)")
+        return 0
+
+    of_list = [str(o) for o in of_numbers]
+    conn_o = connecter_oracle(pwd)
+    conn_m = connecter_mysql()
+    try:
+        in_clause = ",".join(f":{i+1}" for i in range(len(of_list)))
+        sql = f"""
+            SELECT wen.WIP_ENTITY_NAME    AS of_number,
+                   wop.OPERATION_SEQ_NUM  AS seq,
+                   wop.COUNT_POINT_TYPE   AS count_point,
+                   wop.BACKFLUSH_FLAG     AS backflush
+            FROM apps.WIP_OPERATIONS wop, apps.WIP_ENTITIES wen
+            WHERE wop.WIP_ENTITY_ID = wen.WIP_ENTITY_ID
+              AND wen.WIP_ENTITY_NAME IN ({in_clause})
+            ORDER BY wen.WIP_ENTITY_NAME, wop.OPERATION_SEQ_NUM
+        """
+        cur_o = conn_o.cursor()
+        cur_o.execute(sql, of_list)
+        rows = cur_o.fetchall()
+        cur_o.close()
+
+        cur_m = conn_m.cursor()
+        sql_upsert = """
+            INSERT INTO job_routing (of_number, operation_seq_num, count_point, backflush)
+            VALUES (%s, %s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                count_point = VALUES(count_point),
+                backflush   = VALUES(backflush)
+        """
+        n = 0
+        for of_number, seq, count_point, backflush in rows:
+            cur_m.execute(sql_upsert, (
+                str(of_number), int(seq),
+                int(count_point) if count_point is not None else None,
+                int(backflush)   if backflush   is not None else None,
+            ))
+            n += 1
+        conn_m.commit()
+        cur_m.close()
+        print(f"[OK] Routing assignation : {n} op(s) pour {len(of_list)} OF")
+        return n
+    finally:
+        conn_o.close()
+        conn_m.close()
+
+
+# ══════════════════════════════════════════════════════════════
+# SN AUTO pour une op SÉRIALISÉE (appelé par le bouton Move)
+# ══════════════════════════════════════════════════════════════
+def get_sn_for_op(of_number, to_seq, password=None):
+    """Pour une op potentiellement sérialisée : trouve le composant série requis
+    + son locator d'appro, et retourne 1 n° de série dispo (str), ou None
+    (si pas de composant série à cet op, ou aucun SN dispo au bon locator)."""
+    pwd = password or ORACLE_PASS
+    if not pwd:
+        return None
+    conn = connecter_oracle(pwd)
+    try:
+        cur = conn.cursor()
+        # 1) Composant SÉRIALISÉ requis à cet op + son locator d'appro
+        cur.execute("""
+            SELECT msi.segment1, wro.supply_locator_id
+            FROM   apps.wip_requirement_operations wro
+            JOIN   apps.wip_entities we
+                   ON we.wip_entity_id = wro.wip_entity_id
+            JOIN   apps.mtl_system_items_b msi
+                   ON msi.inventory_item_id = wro.inventory_item_id
+                  AND msi.organization_id   = wro.organization_id
+            WHERE  we.wip_entity_name = :1
+              AND  wro.operation_seq_num = :2
+              AND  msi.serial_number_control_code > 1
+            ORDER BY wro.inventory_item_id
+        """, [str(of_number), int(to_seq)])
+        comp_row = cur.fetchone()
+        if not comp_row:
+            return None   # pas de composant série à cet op → move normal
+        composant, loc_id = comp_row
+
+        # 2) 1 SN dispo de ce composant, au locator d'appro
+        cur.execute("""
+            SELECT msn.serial_number
+            FROM   apps.mtl_serial_numbers msn
+            JOIN   apps.mtl_system_items_b msi
+                   ON msi.inventory_item_id = msn.inventory_item_id
+                  AND msi.organization_id   = msn.current_organization_id
+            WHERE  msi.segment1 = :1
+              AND  msn.current_status = 3
+              AND  msn.current_locator_id = :2
+            ORDER BY msn.serial_number
+        """, [composant, loc_id])
+        sn_row = cur.fetchone()
+        if sn_row:
+            print(f"[OK] SN auto pour {of_number}/op{to_seq} (composant {composant}) : {sn_row[0]}")
+            return sn_row[0]
+        print(f"[WARN] Aucun SN dispo pour {composant} au locator {loc_id}")
+        return None
+    finally:
+        conn.close()
+
+
+# ══════════════════════════════════════════════════════════════
 # AFFICHAGE JOBS_PLANNING
 # ══════════════════════════════════════════════════════════════
 def afficher_jobs(conn_mysql):

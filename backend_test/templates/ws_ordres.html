@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Ordres WS{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div class="d-flex align-items-center gap-3">
+        <div style="background:#6022A6;border-radius:12px;padding:12px;color:white;font-size:1.5rem;">
+            <i class="bi bi-cart-check"></i>
+        </div>
+        <div>
+            <div style="font-size:1.2rem;font-weight:700;color:#6022A6;">Pilotage Water Spider</div>
+            <div style="color:#64748b;font-size:.85rem;">Ordres triés par urgence — réapprovisionne de haut en bas</div>
+        </div>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" onclick="charger()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+    </button>
+</div>
+
+<!-- COMPTEURS -->
+<div class="row g-2 mb-3">
+    <div class="col-4"><div class="card text-center p-2">
+        <div id="c-crit" style="font-size:1.6rem;font-weight:800;color:#dc3545;">0</div>
+        <div style="font-size:.72rem;color:#64748b;">🔴 Critique</div></div></div>
+    <div class="col-4"><div class="card text-center p-2">
+        <div id="c-urg" style="font-size:1.6rem;font-weight:800;color:#fd7e14;">0</div>
+        <div style="font-size:.72rem;color:#64748b;">🟠 Urgent</div></div></div>
+    <div class="col-4"><div class="card text-center p-2">
+        <div id="c-norm" style="font-size:1.6rem;font-weight:800;color:#198754;">0</div>
+        <div style="font-size:.72rem;color:#64748b;">🟡 Normal</div></div></div>
+</div>
+
+<div id="liste-ordres"></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const STYLE = {
+    critique: {bord:'#dc3545', bg:'#fef2f2', txt:'#dc3545', label:'CRITIQUE', icon:'bi-exclamation-triangle-fill',
+               action:'Apporter un chariot plein MAINTENANT'},
+    urgent:   {bord:'#fd7e14', bg:'#fff7ed', txt:'#c2410c', label:'URGENT', icon:'bi-exclamation-circle-fill',
+               action:'Préparer la prochaine livraison'},
+    normal:   {bord:'#198754', bg:'#f0fdf4', txt:'#198754', label:'NORMAL', icon:'bi-check-circle-fill',
+               action:'Surveiller'},
+};
+
+function dots(reserve, objectif) {
+    let h = '';
+    for (let i = 0; i < objectif; i++) {
+        const plein = i < reserve;
+        h += `<span style="font-size:.9rem;color:${plein ? '#198754' : '#cbd5e1'};">${plein ? '●' : '○'}</span>`;
+    }
+    return h;
+}
+
+function carte(o) {
+    const s = STYLE[o.niveau];
+    const depuis = (o.depuis_min !== null && o.depuis_min !== undefined)
+        ? `<span style="color:#64748b;"><i class="bi bi-clock"></i> manque depuis ${o.depuis_min} min</span>` : '';
+    return `
+    <div style="background:white;border:1px solid #e2e8f0;border-left:5px solid ${s.bord};border-radius:0 12px 12px 0;
+                padding:14px 18px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,.05);">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div class="d-flex align-items-center gap-3">
+          <span style="background:${s.bg};color:${s.txt};font-size:.78rem;font-weight:800;padding:4px 12px;border-radius:8px;letter-spacing:.5px;">
+            <i class="bi ${s.icon} me-1"></i>${s.label}
+          </span>
+          <span style="font-size:1.05rem;font-weight:700;color:#0f172a;">${o.label} · OP${o.operation_code}</span>
+        </div>
+        <div style="font-size:.95rem;font-weight:700;color:${s.txt};">
+          Réserve ${o.reserve}/${o.objectif} &nbsp; ${dots(o.reserve, o.objectif)}
+        </div>
+      </div>
+      <div class="d-flex align-items-center gap-4 mt-2" style="font-size:.85rem;flex-wrap:wrap;">
+        <span style="font-weight:600;color:#0f172a;"><i class="bi bi-cart-plus me-1"></i>${s.action}</span>
+        ${depuis}
+      </div>
+    </div>`;
+}
+
+function charger() {
+    fetch('/api/ws/ordres')
+      .then(r => r.json())
+      .then(data => {
+        const div = document.getElementById('liste-ordres');
+        document.getElementById('c-crit').textContent = data.filter(o => o.niveau === 'critique').length;
+        document.getElementById('c-urg').textContent  = data.filter(o => o.niveau === 'urgent').length;
+        document.getElementById('c-norm').textContent = data.filter(o => o.niveau === 'normal').length;
+        if (!data.length) {
+            div.innerHTML = `<div class="text-center py-5 text-muted">
+                <i class="bi bi-check-circle" style="font-size:3rem;color:#198754;"></i>
+                <p class="mt-3">Tous les postes sont servis ✅</p></div>`;
+            return;
+        }
+        div.innerHTML = data.map(carte).join('');
+      })
+      .catch(e => console.error('Erreur ordres WS :', e));
+}
+
+charger();
+setInterval(charger, 10000);   // refresh auto toutes les 10 s
+</script>
+{% endblock %}

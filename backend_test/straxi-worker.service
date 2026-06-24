@@ -1,0 +1,20 @@
+[Unit]
+Description=STRAXI - Worker MSCA (file oracle_move_queue)
+# On attend le reseau et la base avant de demarrer
+After=network-online.target mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ge
+WorkingDirectory=/home/ge/backend_test
+ExecStart=/usr/bin/python3 /home/ge/backend_test/oracle_msca.py
+# Relance automatique si le worker plante
+Restart=always
+RestartSec=5
+# Logs dans un fichier (consultables aussi via journalctl)
+StandardOutput=append:/home/ge/backend_test/worker.log
+StandardError=append:/home/ge/backend_test/worker.log
+
+[Install]
+WantedBy=multi-user.target

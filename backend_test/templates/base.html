@@ -11,8 +11,34 @@
             --ge-blue:  #003087;
             --ge-teal:  #00857C;
             --ge-light: #f0f4f8;
+            --ge-ink:   #0f172a;
+            --ge-muted: #64748b;
         }
-        body { background: var(--ge-light); font-family: 'Segoe UI', sans-serif; }
+
+        /* ── TYPOGRAPHIE GLOBALE ── */
+        html { font-size: 17px; }   /* base un peu plus grande → tout grossit proportionnellement */
+        body {
+            background: var(--ge-light);
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, Roboto, Arial, sans-serif;
+            color: var(--ge-ink);
+            font-size: 1rem;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            letter-spacing: .1px;
+        }
+
+        /* Titres plus présents et hiérarchisés */
+        h1, .h1 { font-size: 2rem;   font-weight: 800; letter-spacing: -.3px; }
+        h2, .h2 { font-size: 1.6rem; font-weight: 800; letter-spacing: -.2px; }
+        h3, .h3 { font-size: 1.35rem; font-weight: 700; }
+        h4, .h4 { font-size: 1.18rem; font-weight: 700; }
+        h5, .h5, h6, .h6 { font-weight: 700; }
+
+        /* Textes utilitaires un peu plus lisibles */
+        .small, small { font-size: .85rem; }
+        .text-muted { color: var(--ge-muted) !important; }
+        strong, b { font-weight: 700; }
 
         /* ── NAVBAR ── */
         .straxi-nav {
@@ -35,14 +61,14 @@
             padding-right: 14px;
         }
         .straxi-logo {
-            font-size: 1.5rem;
+            font-size: 1.7rem;
             font-weight: 900;
             color: #6022A6;
             letter-spacing: 2px;
         }
         .straxi-logo span { color: #45B2C5; }
-        .straxi-sub { font-size: 0.7rem; color: #9b59b6; letter-spacing: 1px; margin-top: 1px; }
-        .navbar-time { color: #6022A6; font-size: 0.85rem; font-weight: 600; }
+        .straxi-sub { font-size: 0.78rem; color: #9b59b6; letter-spacing: 1px; margin-top: 1px; font-weight: 600; }
+        .navbar-time { color: #6022A6; font-size: 0.95rem; font-weight: 700; }
         .live-dot { background: #28a745; }
         .live-dot { width:8px; height:8px; background:#28a745; border-radius:50%;
                     display:inline-block; margin-right:5px; animation: pulse 1.5s infinite; }
@@ -57,11 +83,11 @@
             gap: 4px;
         }
         .straxi-tab {
-            padding: 10px 18px;
+            padding: 12px 20px;
             text-decoration: none;
             color: #64748b;
-            font-size: 0.85rem;
-            font-weight: 500;
+            font-size: 0.95rem;
+            font-weight: 600;
             border-bottom: 3px solid transparent;
             transition: all .2s;
         }
@@ -69,17 +95,38 @@
         .straxi-tab.active {
             color: var(--ge-blue);
             border-bottom-color: var(--ge-teal);
-            font-weight: 700;
+            font-weight: 800;
         }
 
         /* ── CONTENT ── */
-        .straxi-content { padding: 20px; }
+        .straxi-content { padding: 22px; }
 
         /* ── CARDS ── */
         .card { border: none; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
-        .card-header { border-radius: 12px 12px 0 0 !important; font-weight: 600; }
+        .card-header { border-radius: 12px 12px 0 0 !important; font-weight: 700; font-size: 1.05rem; }
+        .card-body { font-size: 1rem; }
+
+        /* ── TABLEAUX (plus lisibles) ── */
+        .table { font-size: 0.98rem; }
+        .table > thead th {
+            font-size: 0.82rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .4px;
+            color: var(--ge-muted);
+        }
+        .table > tbody td { vertical-align: middle; padding-top: .7rem; padding-bottom: .7rem; }
+
+        /* ── BOUTONS ── */
+        .btn { font-weight: 600; font-size: 0.98rem; }
+        .btn-lg { font-size: 1.1rem; font-weight: 700; }
+
+        /* ── CHAMPS DE SAISIE ── */
+        .form-control, .form-select { font-size: 1rem; }
+        label, .form-label { font-weight: 600; }
 
         /* ── STATUS BADGES ── */
+        .badge { font-size: 0.8rem; font-weight: 700; letter-spacing: .3px; padding: .45em .7em; }
         .badge-preparee      { background:#6c757d; color:white; }
         .badge-en_attente    { background:#0d6efd; color:white; }
         .badge-terminee      { background:#198754; color:white; }
@@ -116,6 +163,9 @@
     <a href="/transactions" class="straxi-tab {% if request.path == '/transactions' %}active{% endif %}">
         <i class="bi bi-table"></i> Transactions
     </a>
+    <a href="/ws-ordres" class="straxi-tab {% if request.path == '/ws-ordres' %}active{% endif %}">
+        <i class="bi bi-cart-check"></i> Ordres WS
+    </a>
     <a href="/operateur" class="straxi-tab {% if request.path == '/operateur' %}active{% endif %}">
         <i class="bi bi-person-gear"></i> Opérateur
     </a>
@@ -125,6 +175,12 @@
     <a href="/chariots-vides" class="straxi-tab {% if request.path == '/chariots-vides' %}active{% endif %}">
         <i class="bi bi-inbox-fill"></i> Chariots Vides
         <span id="nav-vides-badge" class="badge bg-danger ms-1" style="display:none;font-size:0.65rem;vertical-align:middle"></span>
+    </a>
+    <a href="/etiquette" class="straxi-tab {% if request.path == '/etiquette' %}active{% endif %}">
+        <i class="bi bi-tag"></i> Étiquette
+    </a>
+    <a href="/parametres" class="straxi-tab {% if request.path == '/parametres' %}active{% endif %}">
+        <i class="bi bi-gear-fill"></i> Paramètres
     </a>
 </div>
 
