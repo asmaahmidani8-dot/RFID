@@ -1318,9 +1318,21 @@ def api_chariots_vides():
 # init_ptl(app)
 
 if __name__ == "__main__":
-    cert = os.path.expanduser("~/cert.pem")
-    key  = os.path.expanduser("~/key.pem")
-    ssl_ctx = (cert, key) if os.path.exists(cert) else None
-    # debug OFF par defaut (service systemd) ; activable a la main : FLASK_DEBUG=true python3 app.py
+    here = os.path.dirname(os.path.abspath(__file__))
+    cert = os.path.join(here, "cert.pem")
+    key  = os.path.join(here, "key.pem")
     debug = os.getenv("FLASK_DEBUG", "false").lower() == "true"
-    app.run(host="0.0.0.0", port=5001, debug=debug, use_reloader=False, ssl_context=ssl_ctx)
+
+    # HTTPS : 1) certs fournis (cert.pem/key.pem dans le dossier) sinon
+    #         2) "adhoc" = certificat auto-signé généré par Flask (pip install pyopenssl)
+    if os.path.exists(cert) and os.path.exists(key):
+        ssl_ctx = (cert, key)
+    else:
+        ssl_ctx = "adhoc"
+
+    try:
+        app.run(host="0.0.0.0", port=5001, debug=debug, use_reloader=False, ssl_context=ssl_ctx)
+    except Exception as e:
+        print(f"[WARN] HTTPS indisponible ({e}) → bascule en HTTP. "
+              f"Pour HTTPS : pip install pyopenssl")
+        app.run(host="0.0.0.0", port=5001, debug=debug, use_reloader=False)
