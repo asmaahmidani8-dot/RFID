@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% block title %}Transactions{% endblock %}
+
+{% block content %}
+
+<!-- TITRE -->
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <div class="d-flex align-items-center gap-3">
+        <div style="background:#00857C;border-radius:12px;padding:12px;color:white;font-size:1.5rem;">
+            <i class="bi bi-table"></i>
+        </div>
+        <div>
+            <div style="font-size:1.2rem;font-weight:700;color:#00857C;">Transactions à mover</div>
+        </div>
+    </div>
+    <button class="btn btn-sm btn-outline-secondary" onclick="location.reload()">
+        <i class="bi bi-arrow-clockwise"></i> Actualiser
+    </button>
+</div>
+
+<!-- FILTRE ROUTE (Water Spider) -->
+<div class="d-flex flex-wrap gap-2 mb-2" id="filtres-route">
+    <button class="route-btn active" data-route="all" onclick="filtrerRoute(this)">🚶 Toutes routes</button>
+    <button class="route-btn" data-route="1" onclick="filtrerRoute(this)">🚶 Route 1 <span class="cpt">{{ stats.route1 }}</span></button>
+    <button class="route-btn" data-route="2" onclick="filtrerRoute(this)">🚶 Route 2 <span class="cpt">{{ stats.route2 }}</span></button>
+</div>
+
+<!-- SOUS-ONGLETS DE FILTRE -->
+<div class="d-flex flex-wrap gap-2 mb-3" id="filtres">
+    <button class="filtre-btn active" data-filter="all" onclick="filtrer(this)">
+        📋 Tous <span class="cpt">{{ stats.tous }}</span>
+    </button>
+    <button class="filtre-btn" data-filter="ready" onclick="filtrer(this)">
+        🟢 Prêt à mover <span class="cpt">{{ stats.ready }}</span>
+    </button>
+    <button class="filtre-btn" data-filter="waiting" onclick="filtrer(this)">
+        ⏳ Attente de l'ordre <span class="cpt">{{ stats.waiting }}</span>
+    </button>
+    <button class="filtre-btn" data-filter="done" onclick="filtrer(this)">
+        ✅ Move avec succès <span class="cpt">{{ stats.done }}</span>
+    </button>
+    <button class="filtre-btn" data-filter="error" onclick="filtrer(this)">
+        ❌ Erreurs <span class="cpt">{{ stats.error }}</span>
+    </button>
+    {% if stats.encours %}
+    <button class="filtre-btn" data-filter="encours" onclick="filtrer(this)">
+        🔄 En cours <span class="cpt">{{ stats.encours }}</span>
+    </button>
+    {% endif %}
+</div>
+
+<style>
+    .filtre-btn {
+        border: 1px solid #cbd5e1; background: white; color: #475569;
+        border-radius: 999px; padding: 7px 16px; font-size: .85rem; font-weight: 600;
+        cursor: pointer; transition: all .15s;
+    }
+    .filtre-btn:hover { border-color: #00857C; color: #00857C; }
+    .filtre-btn.active { background: #00857C; color: white; border-color: #00857C; }
+    .filtre-btn .cpt {
+        display: inline-block; min-width: 20px; text-align: center;
+        background: rgba(0,0,0,.08); border-radius: 999px; padding: 0 7px;
+        font-size: .78rem; margin-left: 4px;
+    }
+    .filtre-btn.active .cpt { background: rgba(255,255,255,.25); }
+    .route-btn {
+        border: 1px solid #cbd5e1; background: white; color: #475569;
+        border-radius: 999px; padding: 7px 16px; font-size: .85rem; font-weight: 700;
+        cursor: pointer; transition: all .15s;
+    }
+    .route-btn:hover { border-color: #6022A6; color: #6022A6; }
+    .route-btn.active { background: #6022A6; color: white; border-color: #6022A6; }
+    .route-btn .cpt {
+        display: inline-block; min-width: 20px; text-align: center;
+        background: rgba(0,0,0,.08); border-radius: 999px; padding: 0 7px;
+        font-size: .78rem; margin-left: 4px;
+    }
+    .route-btn.active .cpt { background: rgba(255,255,255,.25); }
+</style>
+
+<!-- TABLEAU -->
+<div class="card">
+    <div class="card-body p-0">
+        {% if carts %}
+        <div class="table-responsive">
+        <table class="table table-hover mb-0">
+            <thead style="background:#f8fafc;">
+                <tr>
+                    <th style="padding:10px 12px;">CHARIOT</th>
+                    <th style="padding:10px 12px;">JOBS / OF</th>
+                    <th style="padding:10px 12px;">ACTION</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for c in carts %}
+            {% set grp = 'encours' if c.status in ('in_queue','in_progress') else c.status %}
+            <tr class="cart-row" data-status="{{ grp }}" data-route="{{ c.route or '' }}">
+                <td style="padding:10px 12px;">
+                    <div style="font-weight:700;font-size:.92rem;color:#003087;">
+                        <i class="bi bi-cart3 me-1"></i>{{ c.chariot_nom or c.chariot_id }}
+                    </div>
+                    <div style="font-size:.7rem;color:#cbd5e1;">{{ c.chariot_id }}</div>
+                    {% if c.nb_jobs > 1 %}
+                    <div style="font-size:.75rem;color:#6022A6;font-weight:600;">{{ c.nb_jobs }} jobs</div>
+                    {% endif %}
+                </td>
+                <td style="padding:10px 12px;">
+                    {% for j in c.jobs %}
+                    <div style="display:flex;align-items:center;gap:8px;margin:2px 0;">
+                        <span style="background:#e0f2fe;color:#0369a1;border-radius:6px;padding:1px 8px;font-size:.74rem;font-weight:700;">OP{{ j.op_num }}</span>
+                        <span style="font-weight:600;font-size:.84rem;">{{ j.of_number }}</span>
+                        <span style="font-size:.76rem;color:#94a3b8;">{{ j.item_code or '' }}</span>
+                        {% if j.moved %}<span style="font-size:.76rem;color:#198754;">✅</span>
+                        {% elif j.queue_flag == 'P' %}<span style="font-size:.76rem;color:#0d6efd;">🔄</span>
+                        {% elif j.queue_flag == 'N' %}<span style="font-size:.76rem;color:#fd7e14;">⏳</span>
+                        {% elif j.queue_flag == 'E' %}<span style="font-size:.76rem;color:#dc3545;">❌</span>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </td>
+                <td style="padding:10px 12px;">
+                    {% if c.status == 'done' %}
+                    <span style="color:#198754;font-weight:600;font-size:.82rem;">✅ Movéé ({{ c.n_done }}/{{ c.nb_jobs }})</span>
+                    {% elif c.status == 'in_progress' %}
+                    <span class="badge" style="background:#0d6efd;font-size:.74rem;">
+                        <span class="spinner-border spinner-border-sm" style="width:.7rem;height:.7rem;"></span> 🔄 En cours MSCA
+                    </span>
+                    {% elif c.status == 'in_queue' %}
+                    <span class="badge" style="background:#fd7e14;font-size:.74rem;">⏳ En file</span>
+                    {% elif c.status == 'error' %}
+                    <button class="btn btn-sm btn-danger" style="font-size:.74rem;"
+                            onclick="doMoveChariot({{ c.mission_id }}, this)" title="{{ c.erreur }}">
+                        ❌ Erreur — Réessayer
+                    </button>
+                    {% elif c.status == 'ready' %}
+                    <button class="btn btn-sm" style="background:#003087;color:white;font-size:.8rem;"
+                            onclick="doMoveChariot({{ c.mission_id }}, this)">
+                        <i class="bi bi-cloud-upload"></i> Move
+                        {% if c.ready_jobs|length > 1 %}({{ c.ready_jobs|length }} jobs){% endif %}
+                    </button>
+                    {% else %}
+                    <span class="badge" style="background:#94a3b8;font-size:.72rem;" title="Move l'op précédente d'abord">
+                        ⏳ Attend l'ordre
+                    </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+            <i class="bi bi-inbox" style="font-size:3rem;color:#ccc;"></i>
+            <p class="mt-3 text-muted">Aucun chariot EN_ATTENTE à mover</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// ── Bouton Move CHARIOT : empile TOUS ses jobs prêts + lance le worker ──
+async function doMoveChariot(missionId, btn) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Ajout à la file…';
+    try {
+        const r = await fetch('/api/transactions/move-chariot', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({mission_id: missionId})
+        });
+        const data = await r.json();
+        if (data.success) {
+            const row = btn.closest('.cart-row');
+            if (row) row.dataset.status = 'encours';
+            btn.outerHTML = '<span class="badge" style="background:#fd7e14;font-size:.74rem;">⏳ En file</span>';
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            btn.className = 'btn btn-sm btn-danger';
+            btn.innerHTML = '✗ Erreur';
+            btn.title = data.message || data.error || 'Erreur';
+            btn.disabled = false;
+        }
+    } catch (e) {
+        btn.className = 'btn btn-sm btn-danger';
+        btn.innerHTML = '✗ Réseau';
+        btn.title = e.message;
+        btn.disabled = false;
+    }
+}
+
+// ── Filtres COMBINÉS : statut (sous-onglets) + route (Water Spider) ──
+let activeStatus = 'all';
+let activeRoute  = 'all';
+
+function filtrer(btn) {
+    document.querySelectorAll('.filtre-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeStatus = btn.dataset.filter;
+    try { localStorage.setItem('txFilter', activeStatus); } catch (e) {}
+    applyFilters();
+}
+
+function filtrerRoute(btn) {
+    document.querySelectorAll('.route-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    activeRoute = btn.dataset.route;
+    try { localStorage.setItem('txRoute', activeRoute); } catch (e) {}
+    applyFilters();
+}
+
+function applyFilters() {
+    document.querySelectorAll('.cart-row').forEach(tr => {
+        const okStatus = (activeStatus === 'all' || tr.dataset.status === activeStatus);
+        const okRoute  = (activeRoute  === 'all' || tr.dataset.route  === activeRoute);
+        tr.style.display = (okStatus && okRoute) ? '' : 'none';
+    });
+}
+
+function hasInFlightMove() {
+    return Array.from(document.querySelectorAll('.cart-row'))
+        .some(tr => tr.dataset.status === 'encours');
+}
+
+// Réapplique les derniers filtres choisis après un refresh
+(function restoreFilters() {
+    let f = 'all', rt = 'all';
+    try { f  = localStorage.getItem('txFilter') || 'all'; } catch (e) {}
+    try { rt = localStorage.getItem('txRoute')  || 'all'; } catch (e) {}
+    const bf = document.querySelector(`.filtre-btn[data-filter="${f}"]`);
+    const br = document.querySelector(`.route-btn[data-route="${rt}"]`);
+    if (bf) { document.querySelectorAll('.filtre-btn').forEach(b=>b.classList.remove('active')); bf.classList.add('active'); activeStatus = f; }
+    if (br) { document.querySelectorAll('.route-btn').forEach(b=>b.classList.remove('active')); br.classList.add('active'); activeRoute = rt; }
+    applyFilters();
+})();
+
+// ── Auto-refresh : recharge tant qu'une move est en file (N) ou en cours (P) ──
+//    On regarde l'attribut data-status des lignes (fiable, même si un filtre les cache).
+(function autoRefresh() {
+    if (hasInFlightMove())
+        setTimeout(() => location.reload(), 3000);
+})();
+</script>
+{% endblock %}

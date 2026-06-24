@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Pick-to-Light{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="mb-0" style="color:var(--ge-navy); font-weight:700">
+                <i class="bi bi-lightbulb-fill me-2" style="color:var(--ge-yellow)"></i>
+                Pick-to-Light — Supermarché
+            </h5>
+            <p class="text-muted small mb-0">Guidage lumineux des bacs</p>
+        </div>
+        <button class="btn btn-sm btn-outline-danger" onclick="eteindre_tout()">
+            <i class="bi bi-power me-1"></i>Tout éteindre
+        </button>
+    </div>
+
+    <!-- SESSIONS EN ATTENTE -->
+    {% if sessions %}
+    <div class="mb-3">
+        <h6 class="section-title mb-2">
+            <i class="bi bi-activity me-1"></i>Bacs allumés en attente
+        </h6>
+        <div id="sessions-container">
+            {% for s in sessions %}
+            <div class="mission-card mb-2" id="session-{{ s.bac_id | replace('_','-') }}">
+                <div class="mission-header">
+                    <div class="d-flex align-items-center gap-2">
+                        <span style="width:12px;height:12px;border-radius:50%;background:var(--ge-green);display:inline-block;animation:blink 1s infinite"></span>
+                        <strong>{{ s.bac_id }}</strong>
+                        <span class="text-muted small">— {{ s.bac_desc }}</span>
+                    </div>
+                    <span class="statut-badge statut-assigne">
+                        Qté : {{ s.quantite }}
+                    </span>
+                </div>
+                <div class="mission-body mt-2">
+                    <span class="info-chip"><i class="bi bi-box-seam"></i> {{ s.item_code }}</span>
+                    <span class="info-chip"><i class="bi bi-stack"></i> Position {{ s.position }}</span>
+                    <span class="info-chip"><i class="bi bi-clock"></i> {{ s.cree_le.strftime('%H:%M') if s.cree_le }}</span>
+                </div>
+                <button class="btn-chercher mt-2" style="padding:10px"
+                        onclick="confirmerBac('{{ s.bac_id }}')">
+                    <i class="bi bi-check-circle me-2"></i>Confirmer prélevé
+                </button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="empty-state mb-3">
+        <i class="bi bi-lightbulb" style="font-size:3rem; color:#F8D754"></i>
+        <p class="mt-2 text-muted">Aucun bac allumé en ce moment</p>
+        <p class="small text-muted">Les bacs s'allument automatiquement lors d'une assignation OF</p>
+    </div>
+    {% endif %}
+
+    <!-- ÉTAGÈRES -->
+    <h6 class="section-title mb-2">
+        <i class="bi bi-grid-3x3-gap me-1"></i>État des étagères
+    </h6>
+    {% for et in etageres %}
+    <div class="assembly-group mb-3">
+        <div class="assembly-title">
+            <i class="bi bi-columns-gap"></i>
+            {{ et.nom }}
+            <span class="text-muted fw-normal">({{ et.etagere_id }})</span>
+        </div>
+        <div id="bacs-{{ et.etagere_id }}" class="d-flex flex-wrap gap-2 mt-2">
+            {% for i in range(et.nb_bacs) %}
+            <div class="bac-indicator" id="bac-{{ et.etagere_id }}-{{ i }}"
+                 style="width:60px;height:60px;border-radius:8px;background:#e5e7eb;
+                        display:flex;align-items:center;justify-content:center;
+                        font-weight:700;font-size:18px;color:#6b7280;
+                        border:2px solid #d1d5db;">
+                {{ i }}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+
+</div>
+
+<!-- SPINNER -->
+<div class="spinner-overlay" id="spinner">
+    <div class="spinner-border text-light" style="width:3rem;height:3rem"></div>
+    <span id="spinner-msg">Envoi commande PTL...</span>
+</div>
+
+<style>
+@keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.2; }
+}
+</style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Confirmer un bac depuis la tablette
+function confirmerBac(bac_id) {
+    document.getElementById('spinner-msg').textContent = 'Confirmation...';
+    document.getElementById('spinner').classList.add('active');
+
+    fetch('/api/ptl/confirm', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({bac_id})
+    })
+    .then(r => r.json())
+    .then(data => {
+        document.getElementById('spinner').classList.remove('active');
+        if (data.success) {
+            // Supprimer la carte de la session
+            const el = document.getElementById('session-' + bac_id.replaceAll('_', '-'));
+            if (el) el.remove();
+        }
+    })
+    .catch(() => document.getElementById('spinner').classList.remove('active'));
+}
+
+// Éteindre toutes les LEDs
+function eteindre_tout() {
+    if (!confirm('Éteindre toutes les LEDs ?')) return;
+    fetch('/api/ptl/eteindre_tout', {method: 'POST'})
+        .then(() => location.reload());
+}
+
+// Refresh auto toutes les 10 secondes
+setInterval(() => location.reload(), 10000);
+</script>
+{% endblock %}

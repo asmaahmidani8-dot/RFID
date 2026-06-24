@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Étiquette Chariot{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center gap-3 mb-4">
+    <div style="background:#003087;border-radius:12px;padding:12px;color:white;font-size:1.4rem;">
+        <i class="bi bi-tag"></i>
+    </div>
+    <div>
+        <div style="font-size:1.2rem;font-weight:700;color:#003087;">Étiquette Chariot</div>
+        <div style="color:#64748b;font-size:.85rem;">Scanne ou choisis un chariot → voir son étiquette</div>
+    </div>
+</div>
+
+<!-- BOUTONS MODE -->
+<div class="d-flex gap-2 mb-3">
+    <button id="btn-mode-scan" class="btn" style="background:#003087;color:white;" onclick="setMode('scan')">
+        <i class="bi bi-qr-code-scan me-1"></i> Scanner
+    </button>
+    <button id="btn-mode-choisir" class="btn btn-outline-secondary" onclick="setMode('choisir')">
+        <i class="bi bi-list-ul me-1"></i> Choisir
+    </button>
+</div>
+
+<!-- MODE SCANNER -->
+<div class="card mb-3" id="zone-scan">
+    <div class="card-body">
+        <h6 class="mb-2"><i class="bi bi-qr-code-scan me-1"></i>Scanner le QR du chariot</h6>
+        <div id="qr-reader" style="max-width:340px;margin:0 auto;"></div>
+        <div class="input-group mt-3">
+            <input id="chariotInput" class="form-control"
+                   placeholder="ou tape l'ID (ex: CH01_F2_P1_OP10)"
+                   onkeydown="if(event.key==='Enter') chercher(this.value)">
+            <button class="btn" style="background:#003087;color:white;"
+                    onclick="chercher(document.getElementById('chariotInput').value)">
+                <i class="bi bi-search"></i> Voir
+            </button>
+        </div>
+        <div id="msg" class="mt-2 small text-muted"></div>
+    </div>
+</div>
+
+<!-- MODE CHOISIR -->
+<div class="card mb-3" id="zone-choisir" style="display:none;">
+    <div class="card-body">
+        <h6 class="mb-2"><i class="bi bi-list-ul me-1"></i>Choisir un chariot en mission</h6>
+        <div class="input-group">
+            <select id="chariotSelect" class="form-select" onchange="chercher(this.value)">
+                <option value="">— Chargement… —</option>
+            </select>
+        </div>
+        <div id="msg2" class="mt-2 small text-muted"></div>
+    </div>
+</div>
+
+<!-- ÉTIQUETTE(S) -->
+<div id="etiquette-content"></div>
+
+<div id="zone-print" style="display:none;" class="text-center mt-3">
+    <button class="btn" style="background:#003087;color:white;" onclick="window.print()">
+        <i class="bi bi-printer me-1"></i>Imprimer
+    </button>
+    <button class="btn btn-outline-secondary" onclick="resetVue()">
+        <i class="bi bi-arrow-repeat me-1"></i>Retour
+    </button>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="/static/js/etiquette.js"></script>
+<script>
+let scanner = null;
+let mode = 'scan';
+
+window.addEventListener("DOMContentLoaded", () => setMode('scan'));
+
+function setMode(m) {
+    mode = m;
+    const sScan = document.getElementById('btn-mode-scan');
+    const sChoi = document.getElementById('btn-mode-choisir');
+    if (m === 'scan') {
+        sScan.className = 'btn'; sScan.style.background = '#003087'; sScan.style.color = 'white';
+        sChoi.className = 'btn btn-outline-secondary'; sChoi.style.background = ''; sChoi.style.color = '';
+        document.getElementById('zone-scan').style.display = 'block';
+        document.getElementById('zone-choisir').style.display = 'none';
+        demarrer();
+    } else {
+        sChoi.className = 'btn'; sChoi.style.background = '#003087'; sChoi.style.color = 'white';
+        sScan.className = 'btn btn-outline-secondary'; sScan.style.background = ''; sScan.style.color = '';
+        document.getElementById('zone-scan').style.display = 'none';
+        document.getElementById('zone-choisir').style.display = 'block';
+        arreterScanner();
+        chargerListe();
+    }
+}
+
+function demarrer() {
+    arreterScanner();
+    scanner = new Html5Qrcode("qr-reader");
+    scanner.start({ facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        onScan, () => {}
+    ).catch(() => {});
+}
+function arreterScanner() {
+    if (scanner) { try { scanner.stop(); } catch(e){} scanner = null; }
+}
+
+function onScan(txt) {
+    scanner.stop().then(() => {
+        const id = txt.replace("CHARIOT:", "").split("|")[0].trim();
+        chercher(id);
+    });
+}
+
+function chargerListe() {
+    fetch('/api/chariots-en-mission').then(r => r.json()).then(list => {
+        const sel = document.getElementById('chariotSelect');
+        if (!list.length) {
+            sel.innerHTML = '<option value="">Aucun chariot en mission</option>';
+            return;
+        }
+        sel.innerHTML = '<option value="">— Choisir un chariot —</option>' +
+            list.map(c => `<option value="${c.chariot_id}">${c.nom || c.chariot_id}${c.type_chariot==='B'?' (Type B)':''}</option>`).join('');
+    });
+}
+
+function chercher(chariotId) {
+    chariotId = (chariotId || "").trim();
+    if (!chariotId) return;
+    fetch('/api/chariot/etiquette?chariot_id=' + encodeURIComponent(chariotId))
+        .then(r => r.json())
+        .then(d => {
+            const msg = document.getElementById('msg');
+            if (d.error) { if(msg) msg.innerHTML = '<span class="text-danger">❌ ' + d.error + '</span>'; return; }
+
+            let html;
+            if (d.binome) {
+                // Type B → afficher les 2 étiquettes (binôme)
+                html = `<div style="text-align:center;font-weight:700;color:#6022A6;margin-bottom:12px;font-size:1rem;">
+                            <i class="bi bi-link-45deg"></i> GROUPE TYPE B — 2 chariots
+                        </div>
+                        <div style="display:flex;flex-wrap:wrap;gap:18px;justify-content:center;align-items:flex-start;">
+                            <div>${buildEtiquetteHtml(d)}</div>
+                            <div>${buildEtiquetteHtml(d.binome)}</div>
+                        </div>`;
+            } else {
+                html = buildEtiquetteHtml(d);
+            }
+            document.getElementById('etiquette-content').innerHTML = html;
+            document.getElementById('zone-print').style.display = 'block';
+            document.getElementById('zone-scan').style.display = 'none';
+            document.getElementById('zone-choisir').style.display = 'none';
+        })
+        .catch(e => { const m = document.getElementById('msg'); if(m) m.textContent = 'Erreur : ' + e.message; });
+}
+
+function resetVue() {
+    document.getElementById('etiquette-content').innerHTML = '';
+    document.getElementById('zone-print').style.display = 'none';
+    const inp = document.getElementById('chariotInput'); if (inp) inp.value = '';
+    setMode(mode);
+}
+</script>
+{% endblock %}

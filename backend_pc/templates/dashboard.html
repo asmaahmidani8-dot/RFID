@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3">
+
+    <!-- STATS -->
+    <div class="row g-3 mb-4">
+        <div class="col-4">
+            <div class="stat-card stat-navy">
+                <div class="stat-value" id="stat-released">{{ total_released }}</div>
+                <div class="stat-label"><i class="bi bi-file-earmark-check"></i> OFs Released</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="stat-card stat-teal">
+                <div class="stat-value" id="stat-actives">{{ total_actives }}</div>
+                <div class="stat-label"><i class="bi bi-truck"></i> Missions actives</div>
+            </div>
+        </div>
+        <div class="col-4">
+            <div class="stat-card stat-teal2">
+                <div class="stat-value">{{ total_chariots }}</div>
+                <div class="stat-label"><i class="bi bi-cart3"></i> Chariots</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- BOUTON SCANNER -->
+    <a href="/scan" class="btn-scan-main w-100 mb-4">
+        <i class="bi bi-qr-code-scan me-2" style="font-size:1.4rem"></i>
+        SCANNER UN CHARIOT
+    </a>
+
+    <!-- MISSIONS EN COURS -->
+    <h6 class="section-title mb-3">
+        <i class="bi bi-activity me-2"></i>Missions en cours
+    </h6>
+
+    {% if missions %}
+    <div class="missions-list">
+        {% for m in missions %}
+        <div class="mission-card">
+            <div class="mission-header">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="chariot-badge type-{{ m.type_chariot | lower }}">
+                        Type {{ m.type_chariot }}
+                    </span>
+                    <strong>{{ m.chariot_id }}</strong>
+                    <span class="text-muted small">— {{ m.nom }}</span>
+                </div>
+                <span class="statut-badge statut-{{ m.statut | lower }}">
+                    {{ m.statut }}
+                </span>
+            </div>
+            <div class="mission-body">
+                <span class="info-chip"><i class="bi bi-gear"></i> OP{{ m.operation_code }}</span>
+                <span class="info-chip"><i class="bi bi-box-seam"></i> {{ m.nb_jobs }} job(s)</span>
+                {% if m.ts_preparee %}
+                <span class="info-chip"><i class="bi bi-clock"></i>
+                    {{ m.ts_preparee.strftime('%H:%M') if m.ts_preparee else '—' }}
+                </span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="bi bi-inbox" style="font-size:3rem; color:#ccc"></i>
+        <p class="mt-2 text-muted">Aucune mission en cours</p>
+        <a href="/scan" class="btn btn-ge-primary mt-2">Scanner un chariot</a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Refresh stats toutes les 30 secondes
+setInterval(() => {
+    fetch('/api/stats')
+        .then(r => r.json())
+        .then(d => {
+            document.getElementById('stat-released').textContent = d.released;
+            document.getElementById('stat-actives').textContent = d.actives;
+        });
+}, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}Chariots Vides{% endblock %}
+
+{% block content %}
+<div class="px-3 pt-3 pb-4">
+
+    <!-- EN-TÊTE ─────────────────────────────────────────────── -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h5 class="mb-0 fw-bold" style="color:#176782">
+                <i class="bi bi-inbox-fill me-2"></i>Chariots Vides
+            </h5>
+            <small class="text-muted">En attente de réapprovisionnement par le Water Spider</small>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge fs-6 px-3 py-2" id="badge-count"
+                  style="background:{% if chariots %}#dc3545{% else %}#198754{% endif %}">
+                {{ chariots|length }} chariot{% if chariots|length > 1 %}s{% endif %}
+            </span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="actualiser()" title="Actualiser">
+                <i class="bi bi-arrow-clockwise"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- GRILLE CHARIOTS ─────────────────────────────────────── -->
+    <div id="chariots-container" class="row g-3">
+        {% for c in chariots %}
+        <div class="col-12 col-sm-6 col-lg-4">
+            <div class="card border-0 shadow-sm h-100"
+                 style="border-left:4px solid #dc3545 !important; border-radius:12px;">
+                <div class="card-body py-3 px-3">
+
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <div>
+                            <div class="d-flex align-items-center gap-2 mb-1">
+                                <span class="badge" style="background:#dc3545">VIDE</span>
+                                <strong style="font-size:1rem">{{ c.nom or c.chariot_id }}</strong>
+                            </div>
+                            <div style="font-size:11px;color:#cbd5e1">{{ c.chariot_id }}</div>
+                        </div>
+                        <div class="text-end">
+                            <div class="text-muted" style="font-size:11px">Opération</div>
+                            <div style="font-size:1.5rem;font-weight:800;color:#176782;line-height:1">
+                                OP{{ c.operation_code }}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-1 mb-2">
+                        <span class="badge bg-light text-dark border" style="font-size:11px">
+                            Type {{ c.type_chariot }}
+                        </span>
+                        {% if c.feeder_num %}
+                        <span class="badge bg-light text-dark border" style="font-size:11px">
+                            <i class="bi bi-columns-gap me-1"></i>Feeder {{ c.feeder_num }}
+                        </span>
+                        {% endif %}
+                        {% if c.poste %}
+                        <span class="badge bg-light text-dark border" style="font-size:11px">
+                            <i class="bi bi-person-workspace me-1"></i>Poste {{ c.poste }}
+                        </span>
+                        {% endif %}
+                    </div>
+
+                    {% if c.ts_en_attente %}
+                    <div class="text-muted" style="font-size:11px">
+                        <i class="bi bi-clock me-1"></i>Vide depuis
+                        {{ c.ts_en_attente.strftime('%d/%m %H:%M') }}
+                    </div>
+                    {% endif %}
+
+                    <a href="/ws" class="btn btn-sm w-100 mt-2 fw-600"
+                       style="background:#176782;color:white;border-radius:8px;font-weight:600">
+                        <i class="bi bi-plus-circle me-1"></i>Nouvelle mission
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="col-12" id="empty-state">
+            <div class="text-center py-5" style="background:white;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+                <i class="bi bi-check-circle-fill" style="font-size:3.5rem;color:#198754"></i>
+                <p class="mt-3 mb-1 fw-bold" style="font-size:1.1rem;color:#176782">
+                    Aucun chariot vide en attente
+                </p>
+                <p class="text-muted small mb-0">
+                    Tous les chariots sont en mission active
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- PIED DE PAGE ────────────────────────────────────────── -->
+    <div class="text-center mt-3">
+        <small class="text-muted">
+            <i class="bi bi-arrow-repeat me-1"></i>Auto-refresh toutes les 20s —
+            Mis à jour : <span id="heure-maj">
+                {% if chariots %}maintenant{% else %}—{% endif %}
+            </span>
+        </small>
+    </div>
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const CARD_TPL = (c) => `
+    <div class="col-12 col-sm-6 col-lg-4">
+        <div class="card border-0 shadow-sm h-100"
+             style="border-left:4px solid #dc3545 !important;border-radius:12px;">
+            <div class="card-body py-3 px-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <span class="badge" style="background:#dc3545">VIDE</span>
+                            <strong style="font-size:1rem">${c.nom || c.chariot_id}</strong>
+                        </div>
+                        <div style="font-size:11px;color:#cbd5e1">${c.chariot_id}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="text-muted" style="font-size:11px">Opération</div>
+                        <div style="font-size:1.5rem;font-weight:800;color:#176782;line-height:1">
+                            OP${c.operation_code}
+                        </div>
+                    </div>
+                </div>
+                <div class="d-flex flex-wrap gap-1 mb-2">
+                    <span class="badge bg-light text-dark border" style="font-size:11px">Type ${c.type_chariot}</span>
+                    ${c.feeder_num ? `<span class="badge bg-light text-dark border" style="font-size:11px"><i class="bi bi-columns-gap me-1"></i>Feeder ${c.feeder_num}</span>` : ''}
+                    ${c.poste ? `<span class="badge bg-light text-dark border" style="font-size:11px"><i class="bi bi-person-workspace me-1"></i>Poste ${c.poste}</span>` : ''}
+                    <span class="badge bg-light text-dark border" style="font-size:11px">${c.ligne_code || ''}</span>
+                </div>
+                <a href="/ws" class="btn btn-sm w-100 mt-2"
+                   style="background:#176782;color:white;border-radius:8px;font-weight:600">
+                    <i class="bi bi-plus-circle me-1"></i>Nouvelle mission
+                </a>
+            </div>
+        </div>
+    </div>`;
+
+const EMPTY_TPL = `
+    <div class="col-12">
+        <div class="text-center py-5" style="background:white;border-radius:14px;box-shadow:0 2px 8px rgba(0,0,0,.06)">
+            <i class="bi bi-check-circle-fill" style="font-size:3.5rem;color:#198754"></i>
+            <p class="mt-3 mb-1 fw-bold" style="font-size:1.1rem;color:#176782">Aucun chariot vide en attente</p>
+            <p class="text-muted small mb-0">Tous les chariots sont en mission active</p>
+        </div>
+    </div>`;
+
+function actualiser() {
+    fetch('/api/chariots-vides')
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('chariots-container');
+            const badge     = document.getElementById('badge-count');
+            const heure     = document.getElementById('heure-maj');
+
+            container.innerHTML = data.length > 0
+                ? data.map(CARD_TPL).join('')
+                : EMPTY_TPL;
+
+            badge.textContent    = data.length + ' chariot' + (data.length > 1 ? 's' : '');
+            badge.style.background = data.length > 0 ? '#dc3545' : '#198754';
+            heure.textContent    = new Date().toLocaleTimeString('fr-FR',
+                {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+
+            // Sync badge nav
+            const nb = document.getElementById('nav-vides-badge');
+            if (nb) { nb.textContent = data.length; nb.style.display = data.length > 0 ? '' : 'none'; }
+        })
+        .catch(() => {});
+}
+
+setInterval(actualiser, 20000);
+</script>
+{% endblock %}

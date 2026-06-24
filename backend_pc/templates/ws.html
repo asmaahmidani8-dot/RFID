@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+{% block title %}Water Spider{% endblock %}
+
+{% block content %}
+
+<!-- TITRE -->
+<div class="d-flex align-items-center gap-3 mb-4">
+    <div style="background:#003087;border-radius:12px;padding:12px;color:white;font-size:1.5rem;">
+        <i class="bi bi-person-workspace"></i>
+    </div>
+    <div>
+        <div style="font-size:1.2rem;font-weight:700;color:#003087;">Water Spider — SCA</div>
+        <div style="color:#64748b;font-size:.85rem;">Recherche job · Association chariot · Items</div>
+    </div>
+</div>
+
+<!-- RECHERCHE JOB -->
+<div class="card mb-4">
+    <div class="card-header" style="background:#003087;color:white;">
+        <i class="bi bi-search me-2"></i>Rechercher un Job Oracle
+    </div>
+    <div class="card-body">
+        <div class="input-group">
+            <input type="text" id="searchInput" class="form-control form-control-lg"
+                   placeholder="Numéro OF, item code ou description..."
+                   oninput="rechercherJob(this.value)">
+            <button class="btn" style="background:#003087;color:white;" onclick="rechercherJob(document.getElementById('searchInput').value)">
+                <i class="bi bi-search"></i>
+            </button>
+        </div>
+        <div id="searchResults" class="mt-3"></div>
+    </div>
+</div>
+
+<!-- JOB SÉLECTIONNÉ -->
+<div id="jobSelected" class="card mb-4" style="display:none;border-left:5px solid #00857C;">
+    <div class="card-header" style="background:#00857C;color:white;">
+        <i class="bi bi-check-circle me-2"></i>Job sélectionné
+        <button class="btn btn-sm btn-outline-light float-end" onclick="resetSelection()">
+            <i class="bi bi-x"></i> Changer
+        </button>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-6">
+                <div style="font-size:.75rem;color:#64748b;font-weight:600;">NUMÉRO OF</div>
+                <div style="font-size:1.1rem;font-weight:700;color:#003087;" id="sel-of">—</div>
+            </div>
+            <div class="col-6">
+                <div style="font-size:.75rem;color:#64748b;font-weight:600;">OPÉRATION</div>
+                <div style="font-size:1.1rem;font-weight:700;color:#00857C;" id="sel-op">—</div>
+            </div>
+            <div class="col-6">
+                <div style="font-size:.75rem;color:#64748b;font-weight:600;">ITEM CODE</div>
+                <div style="font-weight:600;" id="sel-item">—</div>
+            </div>
+            <div class="col-6">
+                <div style="font-size:.75rem;color:#64748b;font-weight:600;">DESCRIPTION</div>
+                <div style="font-weight:600;" id="sel-desc">—</div>
+            </div>
+            <div class="col-6">
+                <div style="font-size:.75rem;color:#64748b;font-weight:600;">QUANTITÉ</div>
+                <div id="sel-qty">—</div>
+            </div>
+            <div class="col-6">
+                <div style="font-size:.75rem;color:#64748b;font-weight:600;">DATE BESOIN</div>
+                <div id="sel-date">—</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SÉLECTION CHARIOT -->
+<div id="chariotSection" class="card mb-4" style="display:none;">
+    <div class="card-header" style="background:#003087;color:white;">
+        <i class="bi bi-cart3 me-2"></i>Sélectionner le Chariot
+    </div>
+    <div class="card-body">
+        <select id="chariotSelect" class="form-select form-select-lg mb-3">
+            <option value="">-- Choisir un chariot --</option>
+            {% for c in chariots %}
+            <option value="{{ c.chariot_id }}">{{ c.nom or c.chariot_id }} — Type {{ c.type_chariot }}</option>
+            {% endfor %}
+        </select>
+
+        <button class="btn btn-lg w-100" style="background:#003087;color:white;font-weight:700;"
+                onclick="associerJob()">
+            <i class="bi bi-link-45deg me-2"></i>ASSOCIER JOB AU CHARIOT
+        </button>
+    </div>
+</div>
+
+<!-- CONFIRMATION -->
+<div id="confirmationSection" class="card mb-4" style="display:none;border:2px solid #198754;">
+    <div class="card-header" style="background:#198754;color:white;">
+        <i class="bi bi-check-circle-fill me-2"></i>Association enregistrée !
+    </div>
+    <div class="card-body text-center py-4">
+        <div style="font-size:3rem;color:#198754;"><i class="bi bi-check-circle-fill"></i></div>
+        <div style="font-size:1.1rem;font-weight:700;margin-top:10px;" id="conf-text">—</div>
+        <div style="color:#64748b;font-size:.88rem;margin-top:5px;">
+            En attente du scan badge <strong>START</strong> sur le lecteur RFID
+        </div>
+
+        <!-- STATUT MSCA -->
+        <div class="mt-3 p-3 rounded" style="background:#fff3cd;">
+            <i class="bi bi-clock-history me-2" style="color:#856404;"></i>
+            <strong style="color:#856404;">En attente de connexion MSCA</strong><br>
+            <small style="color:#856404;">La Move Transaction Oracle sera automatique dès l'accès MSCA disponible</small>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-outline-secondary flex-grow-1" onclick="nouvelleAssociation()">
+                <i class="bi bi-plus-circle me-1"></i>Nouvelle association
+            </button>
+            <a href="/transactions" class="btn flex-grow-1" style="background:#00857C;color:white;">
+                <i class="bi bi-table me-1"></i>Voir transactions
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedJob = null;
+
+function rechercherJob(query) {
+    if (query.length < 2) {
+        document.getElementById('searchResults').innerHTML = '';
+        return;
+    }
+    fetch(`/api/ws/search?q=${encodeURIComponent(query)}`)
+        .then(r => r.json())
+        .then(data => {
+            if (!data.length) {
+                document.getElementById('searchResults').innerHTML =
+                    '<div class="text-muted text-center py-3"><i class="bi bi-inbox"></i> Aucun résultat</div>';
+                return;
+            }
+            let html = '<div class="list-group">';
+            data.forEach(j => {
+                html += `
+                <button class="list-group-item list-group-item-action py-3"
+                        onclick="selectionnerJob(${JSON.stringify(j).replace(/"/g, '&quot;')})">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <strong style="color:#003087;">${j.of_number}</strong>
+                            <span class="badge ms-2" style="background:#e2e8f0;color:#475569;">OP${j.operation_code}</span>
+                        </div>
+                        <small class="text-muted">${j.date_besoin || ''}</small>
+                    </div>
+                    <div style="font-size:.88rem;color:#64748b;margin-top:3px;">
+                        <strong>${j.item_code}</strong> — ${j.item_desc || ''}
+                    </div>
+                    <div style="font-size:.8rem;margin-top:2px;">
+                        Qté: <strong>${j.qty_totale}</strong>
+                    </div>
+                </button>`;
+            });
+            html += '</div>';
+            document.getElementById('searchResults').innerHTML = html;
+        });
+}
+
+function selectionnerJob(job) {
+    selectedJob = job;
+    document.getElementById('searchResults').innerHTML = '';
+    document.getElementById('searchInput').value = job.of_number;
+
+    document.getElementById('sel-of').textContent   = job.of_number;
+    document.getElementById('sel-op').textContent   = 'OP' + job.operation_code;
+    document.getElementById('sel-item').textContent = job.item_code;
+    document.getElementById('sel-desc').textContent = job.item_desc || '—';
+    document.getElementById('sel-qty').textContent  = job.qty_totale;
+    document.getElementById('sel-date').textContent = job.date_besoin || '—';
+
+    document.getElementById('jobSelected').style.display    = 'block';
+    document.getElementById('chariotSection').style.display = 'block';
+    document.getElementById('confirmationSection').style.display = 'none';
+}
+
+function resetSelection() {
+    selectedJob = null;
+    document.getElementById('jobSelected').style.display    = 'none';
+    document.getElementById('chariotSection').style.display = 'none';
+    document.getElementById('searchInput').value = '';
+}
+
+function associerJob() {
+    const chariotId = document.getElementById('chariotSelect').value;
+    if (!chariotId) { alert('Sélectionne un chariot !'); return; }
+    if (!selectedJob) { alert('Sélectionne un job !'); return; }
+
+    fetch('/api/ws/associer', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ chariot_id: chariotId, of_number: selectedJob.of_number,
+                               item_code: selectedJob.item_code, operation_code: selectedJob.operation_code })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.ok) {
+            document.getElementById('conf-text').textContent =
+                `Chariot ${chariotId} ↔ OF ${selectedJob.of_number} (OP${selectedJob.operation_code})`;
+            document.getElementById('jobSelected').style.display    = 'none';
+            document.getElementById('chariotSection').style.display = 'none';
+            document.getElementById('confirmationSection').style.display = 'block';
+        } else {
+            alert('Erreur : ' + (data.error || 'inconnue'));
+        }
+    });
+}
+
+function nouvelleAssociation() {
+    selectedJob = null;
+    document.getElementById('searchInput').value = '';
+    document.getElementById('jobSelected').style.display       = 'none';
+    document.getElementById('chariotSection').style.display    = 'none';
+    document.getElementById('confirmationSection').style.display = 'none';
+}
+</script>
+{% endblock %}
